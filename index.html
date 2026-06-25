@@ -230,7 +230,7 @@
   <div class="topbar-right">
     <div class="points-pill" title="Points you've earned by showing up">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--good)" stroke-width="2.4"><path d="M12 2 3 7v6c0 5 3.5 8 9 9 5.5-1 9-4 9-9V7z"/></svg>
-      <b id="hdrPoints">120</b> pts
+      <b id="hdrPoints">0</b> pts
     </div>
     <button class="golive" onclick="goLive()">Go live</button>
     <span id="authSlot"></span>
@@ -243,7 +243,7 @@
     <p>The lineup puts the smallest live streamers up front — the ones the big sites bury. Show up, watch for real, and you both grow.</p>
     <span class="proto-tag">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
-      Prototype · sample streamers, real interactions
+      Live Twitch data · points saved on this device
     </span>
   </div>
 
@@ -282,10 +282,10 @@
           <div class="ava" style="background:linear-gradient(135deg,#FF5C39,#FF3B7C)"></div>
           <div class="you-meta">
             <div class="you-name">you</div>
-            <div class="you-rank">rank <span id="youRank">#6</span> · this week</div>
+            <div class="you-rank" id="youStatus">connect to begin</div>
           </div>
           <div style="text-align:right">
-            <div class="you-pts" id="youPts">120</div>
+            <div class="you-pts" id="youPts">0</div>
             <div class="you-sub">points</div>
           </div>
         </div>
@@ -311,8 +311,8 @@
 </div>
 
 <footer>
-  Lineup — working prototype of the Phase 1 discovery hub.<br>
-  Streamers, games and viewer counts shown here are sample data to demonstrate the experience. The "go live" and "watch + support" buttons simulate the real flow.
+  Lineup — Phase 1 discovery hub. Live streamer data comes straight from the Twitch API.<br>
+  Points are saved locally in your browser for now — a shared backend (so points and leaderboards work across everyone) is the next build step.
 </footer>
 
 <div class="toast-wrap" id="toasts"></div>
@@ -324,26 +324,7 @@ const PLATFORMS = {
   youtube: {label:'YouTube', color:'var(--youtube)'},
 };
 
-const STREAMERS = [
-  {handle:'dadgamesbadly', title:"First Elden Ring run — no spoilers please, I'm fragile", game:'Elden Ring', cat:'RPG', platform:'twitch', viewers:4, lang:'EN', tags:['blind run','souls']},
-  {handle:'saltyspeed', title:'Celeste any% practice — chasing a sub-30', game:'Celeste', cat:'Speedrun', platform:'twitch', viewers:6, lang:'EN', tags:['speedrun','platformer']},
-  {handle:'pixelmoth', title:'Cozy farming + chill chat, year 3 on the farm', game:'Stardew Valley', cat:'Cozy', platform:'twitch', viewers:7, lang:'EN', tags:['cozy','farming']},
-  {handle:'quietquest', title:'Solo honour mode attempt #4, wish me luck', game:"Baldur's Gate 3", cat:'RPG', platform:'kick', viewers:9, lang:'EN', tags:['rpg','no deaths']},
-  {handle:'ramenwizard', title:'Late night ramen + we talk about anything', game:'Just Chatting', cat:'Just Chatting', platform:'kick', viewers:12, lang:'EN', tags:['irl','chill']},
-  {handle:'botanibox', title:'Building a glass greenhouse base from scratch', game:'Minecraft', cat:'Cozy', platform:'kick', viewers:14, lang:'EN', tags:['minecraft','building']},
-  {handle:'mavi_draws', title:'Commission day — digital painting, lo-fi on', game:'Art', cat:'Art', platform:'twitch', viewers:16, lang:'ES', tags:['art','creative']},
-  {handle:'echoes_fm', title:'Live ambient set + taking your requests', game:'Music', cat:'Music', platform:'twitch', viewers:19, lang:'EN', tags:['music','ambient']},
-  {handle:'velvetfox', title:'Ranked grind to Diamond, pos check every game', game:'Valorant', cat:'FPS', platform:'twitch', viewers:23, lang:'EN', tags:['fps','ranked']},
-  {handle:'nightowl_nat', title:"50 and new to this — come say hi, I don't bite", game:'Just Chatting', cat:'Just Chatting', platform:'twitch', viewers:31, lang:'EN', tags:['irl','new streamer']},
-  {handle:'lofibeats_ko', title:'lofi to study / code to — 6 hour stream', game:'Music', cat:'Music', platform:'youtube', viewers:41, lang:'multi', tags:['music','study']},
-  {handle:'kimchowdown', title:'Making tteokbokki live — spicy, ask me anything', game:'Cooking', cat:'Just Chatting', platform:'youtube', viewers:58, lang:'KO', tags:['irl','cooking']},
-];
-
-const LEADERS = [
-  {name:'streamscout', pts:430}, {name:'raidqueen', pts:380},
-  {name:'couchcritic', pts:295}, {name:'lurkergold', pts:210},
-  {name:'firstfollow', pts:160},
-];
+// Live data only — no sample streamers. The lineup fills from the Twitch API.
 
 // ===== Twitch integration — client-side implicit flow, no backend, no secret =====
 const TWITCH_CLIENT_ID = '8zgyb0jy0198o873wlh5uc0kyu57uh';            // <-- paste your Twitch app Client ID here
@@ -351,7 +332,7 @@ const TWITCH_SCOPES = 'user:read:follows';
 const REDIRECT_URI = window.location.origin + window.location.pathname;
 const HELIX = 'https://api.twitch.tv/helix';
 
-let dataMode = 'sample';   // 'sample' | 'follows' | 'browse'
+let dataMode = 'follows'; // 'follows' | 'browse'
 let liveData = null;       // mapped live follows
 let browseData = null;     // mapped live streams for a browsed category
 let browseLabel = '';      // name of the browsed category
@@ -361,7 +342,7 @@ let token = null;          // user access token (memory only)
 function getActiveList(){
   if(dataMode === 'follows' && liveData) return liveData;
   if(dataMode === 'browse' && browseData) return browseData;
-  return STREAMERS;
+  return [];
 }
 
 // shared: Twitch stream object -> card shape
@@ -507,10 +488,15 @@ async function browseCategory(){
 }
 
 function disconnectTwitch(){
-  token = null; me = null; liveData = null; browseData = null; dataMode = 'sample';
+  token = null; me = null; liveData = null; browseData = null; dataMode = 'follows';
   document.getElementById('browseBar').style.display = 'none';
-  renderAuthSlot(); buildSrcToggle(); buildChips(); render();
-  showBanner('info', 'Disconnected. Showing sample data again.');
+  document.querySelector('.you-name').textContent = 'you';
+  document.getElementById('youStatus').textContent = 'connect to begin';
+  const ava = document.querySelector('.you .ava');
+  ava.style.backgroundImage = 'none';
+  ava.style.background = 'linear-gradient(135deg,#FF5C39,#FF3B7C)';
+  renderAuthSlot(); buildSrcToggle(); buildChips(); renderLeaderboard(); render();
+  showBanner('info', 'Disconnected. Connect Twitch to load live streamers again.');
 }
 
 const TW_ICON = '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M4 3 3 6v12h4v3h3l3-3h4l5-5V3H4zm16 9-3 3h-4l-3 3v-3H6V5h14v7zM15 8h-2v5h2V8zm-5 0H8v5h2V8z"/></svg>';
@@ -534,7 +520,7 @@ function renderMe(mineLive){
   ava.style.backgroundImage = 'url(' + me.profile_image_url + ')';
   ava.style.backgroundSize = 'cover';
   document.querySelector('.you-name').textContent = me.display_name;
-  document.getElementById('youRank').parentElement.innerHTML =
+  document.getElementById('youStatus').innerHTML =
     mineLive ? '<span style="color:var(--live)">\u25CF live now</span> \u00B7 this week'
              : 'offline \u00B7 this week';
 }
@@ -544,15 +530,18 @@ function buildSrcToggle(){
   if(!me){ el.innerHTML = ''; return; }
   el.innerHTML = '<span class="src-toggle">'
     + '<button class="' + (dataMode==='follows'?'on':'') + '" onclick="setMode(\'follows\')">My follows</button>'
-    + '<button class="' + (dataMode==='browse'?'on':'') + '" onclick="setMode(\'browse\')">Discover</button>'
-    + '<button class="' + (dataMode==='sample'?'on':'') + '" onclick="setMode(\'sample\')">Sample</button></span>';
+    + '<button class="' + (dataMode==='browse'?'on':'') + '" onclick="setMode(\'browse\')">Discover</button></span>';
 }
 function setMode(m){
   dataMode = m;
   document.getElementById('browseBar').style.display = (m==='browse') ? 'flex' : 'none';
-  if(m!=='sample'){ state.platform='all'; }
+  state.platform='all';
   if(m==='browse' && !browseData){
     showBanner('info', 'Pick a category below to discover the smallest streamers live in it right now.');
+  } else if(m==='follows'){
+    showBanner('ok', liveData && liveData.length
+      ? 'The channels you follow that are live right now.'
+      : 'None of the channels you follow are live this second.');
   }
   buildSrcToggle(); buildChips(); render();
 }
@@ -578,8 +567,19 @@ function thumbBg(s){
 function avaBg(s){const h=hue(s.handle+'x'); return `linear-gradient(135deg, hsl(${h} 55% 55%), hsl(${(h+50)%360} 60% 42%))`;}
 
 // state
-let state = {platform:'all', cat:'all', sort:'small', q:'', supported:new Set(), points:120};
+let state = {platform:'all', cat:'all', sort:'small', q:'', supported:new Set(), points:0};
 const fmt = n => n>=1000 ? (n/1000).toFixed(1)+'k' : n;
+
+// points persist locally (per browser) until a shared backend exists
+function loadPoints(){
+  try{
+    const raw = localStorage.getItem('lineup_points');
+    if(raw){ const o = JSON.parse(raw); state.points = o.points || 0; state.supported = new Set(o.supported || []); }
+  }catch(e){}
+}
+function savePoints(){
+  try{ localStorage.setItem('lineup_points', JSON.stringify({points: state.points, supported: [...state.supported]})); }catch(e){}
+}
 
 // ---- filter chips ----
 function buildChips(){
@@ -620,12 +620,12 @@ function render(){
   const grid = document.getElementById('grid');
   if(!list.length){
     let msg;
-    if(dataMode==='browse')
+    if(!me)
+      msg = `<div class="empty"><b>Connect Twitch to begin</b>Hit <span style="color:var(--twitch)">Connect Twitch</span> up top to fill the lineup with live streamers — your follows, or any category you want to explore.</div>`;
+    else if(dataMode==='browse')
       msg = `<div class="empty"><b>Pick a category to start discovering</b>Search a game or category above to surface the smallest streamers live in it right now.</div>`;
-    else if(dataMode==='follows')
-      msg = `<div class="empty"><b>No live follows match that</b>None of the channels you follow are live under this filter right now.</div>`;
     else
-      msg = `<div class="empty"><b>No one matches that yet</b>Try clearing a filter — the lineup changes minute to minute.</div>`;
+      msg = `<div class="empty"><b>None of your follows are live</b>Nobody you follow is streaming under this filter right now. Try the Discover tab to find someone new.</div>`;
     grid.innerHTML = msg;
     return;
   }
@@ -671,6 +671,7 @@ function support(handle, btn){
   if(state.supported.has(handle)) return;
   state.supported.add(handle);
   state.points += 10;
+  savePoints();
   document.getElementById('hdrPoints').textContent = state.points;
   document.getElementById('youPts').textContent = state.points;
   renderLeaderboard();
@@ -690,23 +691,20 @@ function toast(html, pts){
   setTimeout(()=>el.remove(), 2600);
 }
 
-// ---- leaderboard (You slot in by points) ----
+// ---- leaderboard: just you for now (a real ranking needs the shared backend) ----
 function renderLeaderboard(){
-  const all = [...LEADERS.map(l=>({...l,me:false})), {name:'you', pts:state.points, me:true}]
-    .sort((a,b)=>b.pts-a.pts);
-  const myRank = all.findIndex(x=>x.me)+1;
-  document.getElementById('youRank').textContent = '#'+myRank;
-  const top = all.slice(0,6);
-  document.getElementById('leaderboard').innerHTML = top.map((l,i)=>{
-    const rank=i+1;
-    const h=hue(l.name); const bg=`linear-gradient(135deg, hsl(${h} 55% 55%), hsl(${(h+50)%360} 60% 42%))`;
-    return `<div class="lb-row ${l.me?'me':''} ${rank<=3?'top'+rank:''}">
-      <span class="lb-num">${rank}</span>
-      <span class="lb-ava" style="background:${bg}"></span>
-      <span class="lb-name">${l.name}</span>
-      <span class="lb-pts">${l.pts}</span>
-    </div>`;
-  }).join('');
+  const name = me ? me.display_name : 'you';
+  const bg = (me && me.profile_image_url)
+    ? `background-image:url('${me.profile_image_url}'); background-size:cover`
+    : `background:linear-gradient(135deg,#FF5C39,#FF3B7C)`;
+  document.getElementById('leaderboard').innerHTML =
+    `<div class="lb-row me top1">
+      <span class="lb-num">1</span>
+      <span class="lb-ava" style="${bg}"></span>
+      <span class="lb-name">${name}</span>
+      <span class="lb-pts">${state.points}</span>
+    </div>
+    <div class="rail-note" style="margin-top:11px">It's just you on the board for now. A real community ranking switches on once points are shared across everyone — that's the backend step.</div>`;
 }
 
 // ---- search ----
@@ -714,6 +712,9 @@ document.getElementById('search').addEventListener('input', e=>{state.q=e.target
 document.getElementById('browseInput').addEventListener('keydown', e=>{ if(e.key==='Enter') browseCategory(); });
 
 // init
+loadPoints();
+document.getElementById('hdrPoints').textContent = state.points;
+document.getElementById('youPts').textContent = state.points;
 renderAuthSlot();
 buildSrcToggle();
 buildChips();
@@ -723,9 +724,9 @@ render();
 parseTokenFromHash();          // handles the redirect back from Twitch
 if(!token && !me){
   if(!TWITCH_CLIENT_ID){
-    showBanner('warn', 'This is running on sample data. To see <b>your</b> live follows, add your Twitch <code>Client ID</code> near the top of this file and reload — setup takes about 5 minutes.');
+    showBanner('warn', 'Add your Twitch <code>Client ID</code> near the top of this file and reload to enable login — setup takes about 5 minutes.');
   } else {
-    showBanner('info', 'Showing sample data. Hit <b>Connect Twitch</b> to fill the lineup with the channels you follow that are live right now.');
+    showBanner('info', 'Hit <b>Connect Twitch</b> to fill the lineup with live streamers — the channels you follow, or any category you want to explore.');
   }
 }
 </script>
