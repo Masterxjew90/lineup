@@ -172,6 +172,8 @@
   .support:hover{background:var(--accent); border-color:var(--accent); color:#fff}
   .support.done{background:rgba(61,220,151,.12); border-color:rgba(61,220,151,.4); color:var(--good); cursor:default}
   .support.done:hover{background:rgba(61,220,151,.12); color:var(--good)}
+  .support.pending{background:rgba(245,166,35,.12); border-color:rgba(245,166,35,.42); color:#F0B45A; cursor:default}
+  .support.pending:hover{background:rgba(245,166,35,.12); color:#F0B45A}
 
   .empty{grid-column:1/-1; text-align:center; padding:60px 20px; color:var(--faint)}
   .empty b{display:block; color:var(--dim); font-size:16px; margin-bottom:6px; font-family:'Bricolage Grotesque',sans-serif}
@@ -432,6 +434,7 @@ async function afterConnect(){
     let mineLive = false;
     try{ const s = await tw('/streams?user_id=' + me.id); mineLive = !!(s.data && s.data.length); }catch(e){}
     renderMe(mineLive);
+    renderLeaderboard();
     await loadFollowedLive();
     dataMode = 'follows'; state.platform = 'all';
     buildSrcToggle(); buildChips(); render();
@@ -576,18 +579,41 @@ function thumbBg(s){
 function avaBg(s){const h=hue(s.handle+'x'); return `linear-gradient(135deg, hsl(${h} 55% 55%), hsl(${(h+50)%360} 60% 42%))`;}
 
 // state
-let state = {platform:'all', cat:'all', sort:'small', q:'', supported:new Set(), points:0};
+let state = {platform:'all', cat:'all', sort:'small', q:'', supported:{}, points:0};
 const fmt = n => n>=1000 ? (n/1000).toFixed(1)+'k' : n;
+
+// ---- points integrity (prototype-level; true verification needs the backend) ----
+const DWELL_MS = 30000;             // must "watch" ~30s before points land (Twitch counts a view at 30s too)
+const COOLDOWN_MS = 6 * 3600000;    // can earn from the same streamer again after 6 hours
+let pending = {};                   // handle -> {startedAt, timer}  (in memory only; lost on refresh by design)
+
+function supportState(handle){
+  if(pending[handle]) return 'pending';
+  const e = state.supported[handle];
+  if(e && (Date.now() - e) < COOLDOWN_MS) return 'cooldown';
+  return 'open';
+}
+function cooldownLeft(handle){
+  const e = state.supported[handle]; if(!e) return '';
+  const r = COOLDOWN_MS - (Date.now() - e);
+  if(r <= 0) return '';
+  const h = Math.ceil(r / 3600000);
+  return h <= 1 ? 'soon' : h + 'h left';
+}
+function fmtTime(ms){
+  const s = Math.max(0, Math.ceil(ms/1000));
+  return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0');
+}
 
 // points persist locally (per browser) until a shared backend exists
 function loadPoints(){
   try{
     const raw = localStorage.getItem('lineup_points');
-    if(raw){ const o = JSON.parse(raw); state.points = o.points || 0; state.supported = new Set(o.supported || []); }
+    if(raw){ const o = JSON.parse(raw); state.points = o.points || 0; state.supported = o.supported || {}; }
   }catch(e){}
 }
 function savePoints(){
-  try{ localStorage.setItem('lineup_points', JSON.stringify({points: state.points, supported: [...state.supported]})); }catch(e){}
+  try{ localStorage.setItem('lineup_points', JSON.stringify({points: state.points, supported: state.supported})); }catch(e){}
 }
 
 // ---- filter chips ----
@@ -640,11 +666,22 @@ function render(){
   }
   grid.innerHTML = list.map(s=>{
     const p = PLATFORMS[s.platform];
-    const done = state.supported.has(s.handle);
+    const ss = supportState(s.handle);
     const thumbStyle = s.thumb ? `background-image:url('${s.thumb}'); background-size:cover; background-position:center` : `background:${thumbBg(s)}`;
     const avaStyle = s.avatar ? `background-image:url('${s.avatar}'); background-size:cover` : `background:${avaBg(s)}`;
     const display = s.name || s.handle;
     const tagHtml = [...(s.tags||[]), s.lang].filter(Boolean).map(t=>`<span class="tag">${t}</span>`).join('');
+    let btnCls = 'support', dis = '', label;
+    if(ss === 'cooldown'){
+      btnCls += ' done'; dis = 'disabled';
+      const left = cooldownLeft(s.handle);
+      label = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg> Supported' + (left ? ' · ' + left : '');
+    } else if(ss === 'pending'){
+      btnCls += ' pending'; dis = 'disabled';
+      label = 'Watching… ' + fmtTime(DWELL_MS - (Date.now() - pending[s.handle].startedAt));
+    } else {
+      label = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12h14M13 6l6 6-6 6"/></svg> Watch + support';
+    }
     return `<article class="card">
       <div class="thumb" style="${thumbStyle}">
         <span class="live-pill"><span class="ld"></span>LIVE</span>
@@ -663,22 +700,36 @@ function render(){
           </div>
         </div>
         <div class="tags">${tagHtml}</div>
-        <button class="support ${done?'done':''}" onclick="support('${s.handle}', this)" ${done?'disabled':''}>
-          ${done
-            ? '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg> Showing up'
-            : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12h14M13 6l6 6-6 6"/></svg> Watch + support'}
-        </button>
+        <button id="sup-${s.handle}" class="${btnCls}" onclick="support('${s.handle}')" ${dis}><span class="sup-label">${label}</span></button>
       </div>
     </article>`;
   }).join('');
 }
 
 // ---- interactions ----
-function support(handle, btn){
+function support(handle){
+  if(supportState(handle) !== 'open') return;   // pending or on cooldown
   const item = getActiveList().find(x=>x.handle===handle);
   if(item && item.url) window.open(item.url, '_blank', 'noopener');
-  if(state.supported.has(handle)) return;
-  state.supported.add(handle);
+  startWatch(handle, item);
+}
+function startWatch(handle, item){
+  pending[handle] = { startedAt: Date.now(), item };
+  pending[handle].timer = setInterval(()=>{
+    const pn = pending[handle]; if(!pn) return;
+    const remain = DWELL_MS - (Date.now() - pn.startedAt);
+    if(remain <= 0){ finishWatch(handle); return; }
+    const lbl = document.querySelector('#sup-' + handle + ' .sup-label');
+    if(lbl) lbl.textContent = 'Watching… ' + fmtTime(remain);
+  }, 1000);
+  render();
+}
+function finishWatch(handle){
+  const pn = pending[handle]; if(!pn) return;
+  clearInterval(pn.timer);
+  const item = pn.item;
+  delete pending[handle];
+  state.supported[handle] = Date.now();
   state.points += 10;
   savePoints();
   document.getElementById('hdrPoints').textContent = state.points;
@@ -687,6 +738,11 @@ function support(handle, btn){
   toast(`You showed up for <b>${item ? (item.name||handle) : handle}</b>`, '+10');
   render();
 }
+// award snappily when the user returns to this tab after watching elsewhere
+document.addEventListener('visibilitychange', ()=>{
+  if(document.hidden) return;
+  Object.keys(pending).forEach(h=>{ if(Date.now() - pending[h].startedAt >= DWELL_MS) finishWatch(h); });
+});
 function goLive(){
   toast(`This would post your stream to the lineup`, 'LIVE');
 }
