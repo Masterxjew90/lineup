@@ -607,6 +607,7 @@ async function afterConnect(){
     // sync profile + pull points and cooldowns from the shared database
     await syncProfile();
     await loadMyState();
+    await loadFollowing();
 
     let mineLive = false;
     try{ const s = await tw('/streams?user_id=' + me.id); mineLive = !!(s.data && s.data.length); }catch(e){}
@@ -668,6 +669,21 @@ async function loadFollowedLive(){
   const streams = res.data || [];
   const avatars = await fetchAvatars(streams);
   liveData = streams.map(s => mapStream(s, avatars));
+}
+
+// who the user already follows on Twitch — so we never offer "Discover" on them
+async function loadFollowing(){
+  alreadyFollow = {};
+  let cursor = '', pages = 0;
+  try{
+    while(pages < 12){
+      const res = await tw('/channels/followed?user_id=' + me.id + '&first=100' + (cursor ? '&after=' + cursor : ''));
+      (res.data || []).forEach(f => { if(f.broadcaster_login) alreadyFollow[f.broadcaster_login.toLowerCase()] = true; });
+      cursor = res.pagination && res.pagination.cursor;
+      pages++;
+      if(!cursor) break;
+    }
+  }catch(e){}
 }
 
 // ---- live auto-refresh (so you never have to reload to see updated viewer counts) ----
@@ -737,7 +753,7 @@ async function disconnectTwitch(){
   if(autoTimer){ clearInterval(autoTimer); autoTimer = null; }
   token = null; me = null; liveData = null; browseData = null; browseGameId = null; dataMode = 'follows';
   booted = false; clearToken();
-  state.points = 0; state.supported = {}; state.feedback = {}; state.discovered = {}; armedDiscovery = {};
+  state.points = 0; state.supported = {}; state.feedback = {}; state.discovered = {}; armedDiscovery = {}; alreadyFollow = {};
   updatePointsDisplay();
   document.getElementById('browseBar').style.display = 'none';
   document.querySelector('.you-name').textContent = 'you';
@@ -821,6 +837,7 @@ function avaBg(s){const h=hue(s.handle+'x'); return `linear-gradient(135deg, hsl
 let state = {platform:'all', cat:'all', sort:'small', q:'', supported:{}, feedback:{}, discovered:{}, points:0};
 const fmt = n => n>=1000 ? (n/1000).toFixed(1)+'k' : n;
 let armedDiscovery = {};   // handle -> true once they've opened the channel and can claim
+let alreadyFollow = {};    // login -> true for channels the user already follows (no discovery shown)
 let browseGameId = null;   // last browsed category, so we can auto-refresh it
 let autoTimer = null;      // live auto-refresh timer
 
@@ -962,6 +979,11 @@ function render(){
     const fbLabel = fbDone
       ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg> Feedback'
       : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Feedback';
+    // discovery only makes sense for creators you don't already follow (unless you discovered them here)
+    const showDiscover = state.discovered[s.handle] || !alreadyFollow[s.handle];
+    const discBtn = showDiscover
+      ? `<button id="disc-${s.handle}" class="${dCls}" onclick="discover('${s.handle}')" ${dDis} title="${ds==='done'?'Discovery counted':'Follow while live to earn +8'}"><span class="disc-label">${dLabel}</span></button>`
+      : '';
     return `<article class="card">
       <div class="thumb" style="${thumbStyle}">
         <span class="live-pill"><span class="ld"></span>LIVE</span>
@@ -984,7 +1006,7 @@ function render(){
           <button id="sup-${s.handle}" class="${btnCls}" onclick="support('${s.handle}')" ${dis}><span class="sup-label">${label}</span></button>
         </div>
         <div class="card-sub">
-          <button id="disc-${s.handle}" class="${dCls}" onclick="discover('${s.handle}')" ${dDis} title="${ds==='done'?'Discovery counted':'Follow while live to earn +8'}"><span class="disc-label">${dLabel}</span></button>
+          ${discBtn}
           <button class="subbtn fb ${fbDone?'done':''}" onclick="openFeedback('${s.handle}')" ${fbDone?'disabled':''} title="${fbDone?'Feedback sent':'Leave feedback (+5)'}">${fbLabel}</button>
         </div>
       </div>
