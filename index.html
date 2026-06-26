@@ -339,8 +339,8 @@
 </div>
 
 <footer>
-  Lineup — Phase 1 discovery hub. Live streamer data comes straight from the Twitch API.<br>
-  Points are saved locally in your browser for now — a shared backend (so points and leaderboards work across everyone) is the next build step.
+  Lineup — Phase 1 discovery hub. Live streamer data comes from the Twitch API; accounts, points and the leaderboard run on a shared database.<br>
+  Points are awarded server-side with cooldowns enforced in the database, so scores are shared across everyone and can't be edited from the browser.
 </footer>
 
 <div class="modal-bg" id="fbModal">
@@ -361,6 +361,7 @@
 
 <div class="toast-wrap" id="toasts"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const PLATFORMS = {
   twitch:  {label:'Twitch',  color:'var(--twitch)'},
@@ -370,8 +371,13 @@ const PLATFORMS = {
 
 // Live data only — no sample streamers. The lineup fills from the Twitch API.
 
-// ===== Twitch integration — client-side implicit flow, no backend, no secret =====
-const TWITCH_CLIENT_ID = '8zgyb0jy0198o873wlh5uc0kyu57uh';            // <-- paste your Twitch app Client ID here
+// ===== Supabase (shared backend: accounts, points, leaderboard) =====
+const SUPABASE_URL = 'https://pxitnueanibluylurfif.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4aXRudWVhbmlibHV5bHVyZmlmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0NTk3OTEsImV4cCI6MjA5ODAzNTc5MX0.M_fzzLm7nFACelBHM_BD1KXGa5yj9JAVECM3VNLSwng';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// ===== Twitch (Client ID of the confidential app Supabase logs in through) =====
+const TWITCH_CLIENT_ID = 'ir2n9jv3k56m4dhu6y8x2cnzcdfau8';
 const TWITCH_SCOPES = 'user:read:follows';
 const REDIRECT_URI = window.location.origin + window.location.pathname;
 const HELIX = 'https://api.twitch.tv/helix';
@@ -381,7 +387,8 @@ let liveData = null;       // mapped live follows
 let browseData = null;     // mapped live streams for a browsed category
 let browseLabel = '';      // name of the browsed category
 let me = null;             // logged-in Twitch user
-let token = null;          // user access token (memory only)
+let token = null;          // Twitch provider token (from Supabase, stored by us)
+let booted = false;        // guard so we only boot the session once
 
 function getActiveList(){
   if(dataMode === 'follows' && liveData) return liveData;
@@ -419,57 +426,38 @@ async function fetchAvatars(streams){
   return avatars;
 }
 
-function connectTwitch(){
-  if(!TWITCH_CLIENT_ID){
-    showBanner('warn', 'Almost there — paste your Twitch <b>Client ID</b> into the <code>TWITCH_CLIENT_ID</code> line near the top of this file, then reload and connect. (See the setup notes I sent alongside this file.)');
-    return;
-  }
-  const st = Math.random().toString(36).slice(2);
-  try{ sessionStorage.setItem('tw_state', st); }catch(e){}
-  window.location.href = 'https://id.twitch.tv/oauth2/authorize'
-    + '?response_type=token'
-    + '&client_id=' + encodeURIComponent(TWITCH_CLIENT_ID)
-    + '&redirect_uri=' + encodeURIComponent(REDIRECT_URI)
-    + '&scope=' + encodeURIComponent(TWITCH_SCOPES)
-    + '&state=' + st;
+async function connectTwitch(){
+  showBanner('info', 'Opening Twitch sign-in…');
+  const { error } = await sb.auth.signInWithOAuth({
+    provider: 'twitch',
+    options: { scopes: TWITCH_SCOPES, redirectTo: REDIRECT_URI }
+  });
+  if(error) showBanner('warn', "Couldn't start Twitch sign-in: " + error.message);
 }
 
-function parseTokenFromHash(){
-  if(!window.location.hash) return;
-  const p = new URLSearchParams(window.location.hash.slice(1));
-  const t = p.get('access_token');
-  const err = p.get('error');
-  if(t){
-    let saved = null;
-    try{ saved = sessionStorage.getItem('tw_state'); }catch(e){}
-    const st = p.get('state');
-    if(st && saved && st !== saved) console.warn('OAuth state mismatch — continuing anyway.');
-    token = t;
-    saveToken();
-    history.replaceState(null, '', REDIRECT_URI);
-    afterConnect();
-  } else if(err){
-    showBanner('warn', "Twitch sign-in didn't complete: " + (p.get('error_description') || err));
-    history.replaceState(null, '', REDIRECT_URI);
-  }
-}
-
-function saveToken(){ try{ localStorage.setItem('lineup_tw_token', token); }catch(e){} }
-function clearToken(){ try{ localStorage.removeItem('lineup_tw_token'); }catch(e){} }
+function saveToken(){ try{ localStorage.setItem('lineup_tw_provider', token); }catch(e){} }
+function loadToken(){ try{ return localStorage.getItem('lineup_tw_provider'); }catch(e){ return null; } }
+function clearToken(){ try{ localStorage.removeItem('lineup_tw_provider'); }catch(e){} }
 
 async function tw(path){
   const r = await fetch(HELIX + path, {headers:{'Client-Id':TWITCH_CLIENT_ID, 'Authorization':'Bearer ' + token}});
-  if(r.status === 401){ token = null; me = null; clearToken(); throw new Error('expired'); }
+  if(r.status === 401){ token = null; clearToken(); throw new Error('expired'); }
   if(!r.ok) throw new Error('Twitch API ' + r.status);
   return r.json();
 }
 
 async function afterConnect(){
   try{
-    showBanner('info', 'Loading the channels you follow that are live…');
+    if(!token){ showBanner('warn', 'Your Twitch access expired — hit Connect Twitch to refresh it.'); renderAuthSlot(); return; }
+    showBanner('info', 'Loading your profile and live follows…');
     const u = await tw('/users');
     me = u.data && u.data[0];
     if(!me) throw new Error('no user returned');
+
+    // sync profile + pull points and cooldowns from the shared database
+    await syncProfile();
+    await loadMyState();
+
     let mineLive = false;
     try{ const s = await tw('/streams?user_id=' + me.id); mineLive = !!(s.data && s.data.length); }catch(e){}
     renderMe(mineLive);
@@ -481,12 +469,41 @@ async function afterConnect(){
       ? "You're live right now — and below are the channels you follow that are live too."
       : (liveData.length
           ? 'Connected. These are the channels you follow that are live right now.'
-          : 'Connected — but none of the channels you follow are live this second. Try the Sample toggle, or check back later.'));
+          : 'Connected — none of your follows are live this second. Try the Discover tab to find someone new.'));
   }catch(e){
-    if(e.message === 'expired') showBanner('warn', 'Your Twitch session expired. Connect again to refresh it.');
-    else showBanner('warn', "Couldn't load your Twitch data: " + e.message);
+    if(e.message === 'expired') showBanner('warn', 'Your Twitch session expired. Hit Connect Twitch to refresh it.');
+    else showBanner('warn', "Couldn't load your data: " + (e.message || e));
     renderAuthSlot();
   }
+}
+
+// write/refresh this user's profile row in Supabase
+async function syncProfile(){
+  try{ await sb.rpc('upsert_profile', { p_login: me.login, p_name: me.display_name, p_avatar: me.profile_image_url }); }catch(e){}
+}
+
+// pull my points total + recent supports/feedback (for cooldown state) from the database
+async function loadMyState(){
+  try{
+    const uid = (await sb.auth.getUser()).data.user.id;
+    const { data: prof } = await sb.from('profiles').select('points').eq('id', uid).single();
+    state.points = (prof && prof.points) || 0;
+  }catch(e){ state.points = 0; }
+  state.supported = {}; state.feedback = {};
+  const since = new Date(Date.now() - COOLDOWN_MS).toISOString();
+  try{
+    const { data: sup } = await sb.from('supports').select('target_login, created_at').gt('created_at', since);
+    (sup || []).forEach(r => { const t = new Date(r.created_at).getTime(); if(!state.supported[r.target_login] || t > state.supported[r.target_login]) state.supported[r.target_login] = t; });
+  }catch(e){}
+  try{
+    const { data: fb } = await sb.from('feedback').select('target_login, created_at').gt('created_at', since);
+    (fb || []).forEach(r => { const t = new Date(r.created_at).getTime(); if(!state.feedback[r.target_login] || t > state.feedback[r.target_login]) state.feedback[r.target_login] = t; });
+  }catch(e){}
+  updatePointsDisplay();
+}
+function updatePointsDisplay(){
+  document.getElementById('hdrPoints').textContent = state.points;
+  document.getElementById('youPts').textContent = state.points;
 }
 
 async function loadFollowedLive(){
@@ -537,9 +554,12 @@ async function browseCategory(){
   }
 }
 
-function disconnectTwitch(){
+async function disconnectTwitch(){
+  try{ await sb.auth.signOut(); }catch(e){}
   token = null; me = null; liveData = null; browseData = null; dataMode = 'follows';
-  clearToken();
+  booted = false; clearToken();
+  state.points = 0; state.supported = {}; state.feedback = {};
+  updatePointsDisplay();
   document.getElementById('browseBar').style.display = 'none';
   document.querySelector('.you-name').textContent = 'you';
   document.getElementById('youStatus').textContent = 'connect to begin';
@@ -648,17 +668,7 @@ function fmtTime(ms){
   return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0');
 }
 
-// points + cooldowns persist locally (per browser) until a shared backend exists
-function asObj(v){ return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {}; }
-function loadPoints(){
-  try{
-    const raw = localStorage.getItem('lineup_points');
-    if(raw){ const o = JSON.parse(raw); state.points = o.points || 0; state.supported = asObj(o.supported); state.feedback = asObj(o.feedback); }
-  }catch(e){}
-}
-function savePoints(){
-  try{ localStorage.setItem('lineup_points', JSON.stringify({points: state.points, supported: state.supported, feedback: state.feedback})); }catch(e){}
-}
+// points + cooldowns now live in the shared database (loaded in loadMyState, written by award_points)
 
 // ---- filter chips ----
 function buildChips(){
@@ -776,19 +786,28 @@ function startWatch(handle, item){
   }, 1000);
   render();
 }
-function finishWatch(handle){
+async function finishWatch(handle){
   const pn = pending[handle]; if(!pn) return;
   clearInterval(pn.timer);
   const item = pn.item;
   delete pending[handle];
-  state.supported[handle] = Date.now();
-  state.points += 10;
-  savePoints();
-  document.getElementById('hdrPoints').textContent = state.points;
-  document.getElementById('youPts').textContent = state.points;
-  renderLeaderboard();
-  toast(`You showed up for <b>${item ? (item.name||handle) : handle}</b>`, '+10');
   render();
+  try{
+    const { data, error } = await sb.rpc('award_points', { p_kind: 'watch', p_target: handle });
+    if(error){
+      state.supported[handle] = Date.now();  // server says cooldown / already counted
+      render();
+      return;
+    }
+    state.points = data;
+    state.supported[handle] = Date.now();
+    updatePointsDisplay();
+    renderLeaderboard();
+    toast(`You showed up for <b>${item ? (item.name||handle) : handle}</b>`, '+10');
+    render();
+  }catch(e){
+    showBanner('warn', "Couldn't save those points — try again in a moment.");
+  }
 }
 // award snappily when the user returns to this tab after watching elsewhere
 document.addEventListener('visibilitychange', ()=>{
@@ -821,20 +840,34 @@ function updateFbCount(){
   document.getElementById('fbCount').textContent = n + ' / 20 min';
   document.getElementById('fbSubmit').disabled = n < 20;
 }
-function submitFeedback(){
+async function submitFeedback(){
   if(!fbHandle) return;
-  if(document.getElementById('fbText').value.trim().length < 20) return;
+  const msg = document.getElementById('fbText').value.trim();
+  if(msg.length < 20) return;
   const handle = fbHandle;
   const item = getActiveList().find(x=>x.handle===handle);
-  state.feedback[handle] = Date.now();
-  state.points += 5;
-  savePoints();
-  document.getElementById('hdrPoints').textContent = state.points;
-  document.getElementById('youPts').textContent = state.points;
-  renderLeaderboard();
-  toast(`Feedback sent to <b>${item ? (item.name||handle) : handle}</b>`, '+5');
-  closeFeedback();
-  render();
+  const btn = document.getElementById('fbSubmit');
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try{
+    const { data, error } = await sb.rpc('award_points', { p_kind: 'feedback', p_target: handle, p_message: msg });
+    if(error){
+      const m = (error.message || '').toLowerCase();
+      if(m.includes('cooldown')){ showBanner('info', 'You already left feedback for them recently.'); state.feedback[handle] = Date.now(); closeFeedback(); render(); return; }
+      btn.disabled = false; btn.textContent = 'Submit feedback · +5';
+      showBanner('warn', "Couldn't send that feedback — try again.");
+      return;
+    }
+    state.points = data;
+    state.feedback[handle] = Date.now();
+    updatePointsDisplay();
+    renderLeaderboard();
+    toast(`Feedback sent to <b>${item ? (item.name||handle) : handle}</b>`, '+5');
+    closeFeedback();
+    render();
+  }catch(e){
+    btn.disabled = false; btn.textContent = 'Submit feedback · +5';
+    showBanner('warn', "Couldn't send that feedback — try again.");
+  }
 }
 document.getElementById('fbText').addEventListener('input', updateFbCount);
 document.getElementById('fbModal').addEventListener('click', e=>{ if(e.target.id === 'fbModal') closeFeedback(); });
@@ -851,24 +884,41 @@ function toast(html, pts){
   setTimeout(()=>el.remove(), 2600);
 }
 
-// ---- leaderboard: just you for now (a real ranking needs the shared backend) ----
-function renderLeaderboard(){
-  const name = me ? me.display_name : 'you';
-  const url = me ? 'https://twitch.tv/' + me.login : null;
-  const bg = (me && me.profile_image_url)
-    ? `background-image:url('${me.profile_image_url}'); background-size:cover`
-    : `background:linear-gradient(135deg,#FF5C39,#FF3B7C)`;
-  const ext = url ? '<span class="lb-ext"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3"/></svg></span>' : '';
-  const click = url ? `class="lb-row me top1 clickable" onclick="window.open('${url}','_blank','noopener')" title="Open ${name} on Twitch"` : 'class="lb-row me top1"';
-  document.getElementById('leaderboard').innerHTML =
-    `<div ${click}>
-      <span class="lb-num">1</span>
+// ---- leaderboard: real shared ranking, read live from the database ----
+async function renderLeaderboard(){
+  const el = document.getElementById('leaderboard');
+  let rows = [];
+  try{
+    const { data } = await sb.from('profiles')
+      .select('display_name, avatar, points, twitch_login')
+      .order('points', { ascending: false })
+      .limit(8);
+    rows = data || [];
+  }catch(e){}
+
+  if(!rows.length){
+    el.innerHTML = `<div class="rail-note">No scores yet — be the first to show up for a streamer and you'll top the board.</div>`;
+    return;
+  }
+  const myLogin = me ? me.login : null;
+  el.innerHTML = rows.map((r,i)=>{
+    const rank = i+1;
+    const mine = myLogin && r.twitch_login === myLogin;
+    const url = r.twitch_login ? 'https://twitch.tv/' + r.twitch_login : null;
+    const name = r.display_name || r.twitch_login || 'streamer';
+    const bg = r.avatar ? `background-image:url('${r.avatar}'); background-size:cover`
+                        : `background:linear-gradient(135deg, hsl(${hue(name)} 55% 55%), hsl(${(hue(name)+50)%360} 60% 42%))`;
+    const ext = url ? '<span class="lb-ext"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3"/></svg></span>' : '';
+    const cls = `lb-row ${mine?'me':''} ${rank<=3?'top'+rank:''} ${url?'clickable':''}`;
+    const click = url ? `onclick="window.open('${url}','_blank','noopener')" title="Open ${name} on Twitch"` : '';
+    return `<div class="${cls}" ${click}>
+      <span class="lb-num">${rank}</span>
       <span class="lb-ava" style="${bg}"></span>
       <span class="lb-name">${name}</span>
       ${ext}
-      <span class="lb-pts">${state.points}</span>
-    </div>
-    <div class="rail-note" style="margin-top:11px">It's just you on the board for now. A real community ranking switches on once points are shared across everyone — that's the backend step.</div>`;
+      <span class="lb-pts">${r.points}</span>
+    </div>`;
+  }).join('');
 }
 
 // ---- search ----
@@ -876,29 +926,30 @@ document.getElementById('search').addEventListener('input', e=>{state.q=e.target
 document.getElementById('browseInput').addEventListener('keydown', e=>{ if(e.key==='Enter') browseCategory(); });
 
 // init
-loadPoints();
-document.getElementById('hdrPoints').textContent = state.points;
-document.getElementById('youPts').textContent = state.points;
+token = loadToken();
 renderAuthSlot();
 buildSrcToggle();
 buildChips();
-renderLeaderboard();
+renderLeaderboard();   // shows the shared board even before you log in
 render();
 
-parseTokenFromHash();          // handles the redirect back from Twitch
-if(!token && !me){
-  let stored = null;
-  try{ stored = localStorage.getItem('lineup_tw_token'); }catch(e){}
-  if(stored){
-    token = stored;
-    showBanner('info', 'Reconnecting to Twitch…');
-    afterConnect();            // restores your session; if the token expired it falls back to Connect
-  } else if(!TWITCH_CLIENT_ID){
-    showBanner('warn', 'Add your Twitch <code>Client ID</code> near the top of this file and reload to enable login — setup takes about 5 minutes.');
-  } else {
-    showBanner('info', 'Hit <b>Connect Twitch</b> to fill the lineup with live streamers — the channels you follow, or any category you want to explore.');
+// Supabase tells us when a session appears (fresh login or restored on refresh)
+sb.auth.onAuthStateChange((event, session)=>{
+  if(session && session.provider_token){ token = session.provider_token; saveToken(); }
+  if(event === 'SIGNED_OUT'){ booted = false; return; }
+  if(session && !booted){
+    booted = true;
+    if(!token) token = loadToken();           // restored sessions don't carry the provider token
+    afterConnect();
   }
-}
+});
+
+// if nobody is logged in, prompt to connect
+setTimeout(()=>{
+  if(!booted && !me){
+    showBanner('info', 'Hit <b>Connect Twitch</b> to fill the lineup with live streamers — your follows, or any category you want to explore.');
+  }
+}, 1200);
 </script>
 </body>
 </html>
