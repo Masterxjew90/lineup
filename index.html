@@ -128,7 +128,7 @@
   @media(max-width:980px){ .main{grid-template-columns:1fr} .rail{position:static; top:auto; order:1} .feed{order:0} }
 
   /* ---------- Grid ---------- */
-  .countline{font-size:13px; color:var(--faint); margin-bottom:14px; font-family:'JetBrains Mono',monospace}
+  .countline{font-size:13px; color:var(--faint); font-family:'JetBrains Mono',monospace}
   .countline b{color:var(--dim)}
   .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(248px,1fr)); gap:18px}
   .card{
@@ -176,6 +176,17 @@
   .support.pending:hover{background:rgba(245,166,35,.12); color:#F0B45A}
   .card-actions{margin-top:auto; display:flex; gap:8px}
   .card-actions .support{margin-top:0; flex:1; width:auto}
+  .card-sub{display:flex; gap:8px; margin-top:8px}
+  .subbtn{flex:1; display:flex; align-items:center; justify-content:center; gap:6px; background:var(--surface-2); border:1px solid var(--border-2); border-radius:10px; padding:8px; font-size:12.5px; font-weight:600; color:var(--dim); transition:all .12s}
+  .subbtn:hover{background:var(--surface-3); color:var(--text)}
+  .subbtn.disc.armed{background:rgba(255,92,57,.13); border-color:rgba(255,92,57,.45); color:var(--accent)}
+  .subbtn.disc.done, .subbtn.fb.done{color:var(--good); border-color:rgba(61,220,151,.4); background:rgba(61,220,151,.1); cursor:default}
+  .subbtn.disc.done:hover, .subbtn.fb.done:hover{background:rgba(61,220,151,.1); color:var(--good)}
+  .feed-top{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px}
+  .refresh-btn{display:inline-flex; align-items:center; gap:7px; font-size:12.5px; color:var(--dim); background:var(--surface); border:1px solid var(--border); border-radius:9px; padding:7px 12px; transition:all .12s}
+  .refresh-btn:hover{border-color:var(--border-2); color:var(--text)}
+  .refresh-btn.spin svg{animation:spin360 .6s linear}
+  @keyframes spin360{from{transform:rotate(0)} to{transform:rotate(360deg)}}
   .fb-btn{flex-shrink:0; width:44px; display:flex; align-items:center; justify-content:center; background:var(--surface-2); border:1px solid var(--border-2); border-radius:10px; color:var(--dim); transition:all .12s}
   .fb-btn:hover{background:var(--surface-3); color:var(--text)}
   .fb-btn.done{color:var(--good); border-color:rgba(61,220,151,.4); background:rgba(61,220,151,.1); cursor:default}
@@ -406,7 +417,13 @@
         <input id="browseInput" type="text" placeholder="Category or game — e.g. Stardew Valley, Art, Celeste…" aria-label="Browse a category">
         <button id="browseBtn" onclick="browseCategory()">Find small streamers</button>
       </div>
-      <div class="countline"><b id="resultCount">0</b> live now</div>
+      <div class="feed-top">
+        <div class="countline"><b id="resultCount">0</b> live now</div>
+        <button class="refresh-btn" id="refreshBtn" onclick="refreshActive(true)" title="Refresh the live list">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6"/></svg>
+          <span>Refresh</span>
+        </button>
+      </div>
       <div class="grid" id="grid"></div>
     </div>
 
@@ -435,11 +452,12 @@
         <h3>How points work</h3>
         <ul class="how">
           <li><span class="k">+10</span><span>Watch a stream for real (~11 min counts)</span></li>
+          <li><span class="k">+8</span><span>Discover a new creator (follow while they're live)</span></li>
           <li><span class="k">+5</span><span>Leave useful feedback on a VOD</span></li>
           <li><span class="k">+25</span><span>Raid or host another member <em class="soon">soon</em></span></li>
-          <li><span class="k">+15</span><span>Stream on your committed schedule <em class="soon">soon</em></span></li>
+          <li><span class="k">+20</span><span>Collab with another live member <em class="soon">soon</em></span></li>
         </ul>
-        <div class="rail-note" style="margin-top:10px">Points reward showing up — never buying follows. That's what keeps the whole thing safe under Twitch, Kick &amp; YouTube rules.</div>
+        <div class="rail-note" style="margin-top:10px">Points reward genuine discovery and showing up — never buying follows. That's what keeps the whole thing safe under Twitch's rules.</div>
       </div>
     </aside>
   </div>
@@ -596,7 +614,9 @@ async function afterConnect(){
     renderLeaderboard();
     await loadFollowedLive();
     dataMode = 'follows'; state.platform = 'all';
+    resumeWatches();
     buildSrcToggle(); buildChips(); render();
+    startAutoRefresh();
     showBanner('ok', mineLive
       ? "You're live right now — and below are the channels you follow that are live too."
       : (liveData.length
@@ -631,6 +651,11 @@ async function loadMyState(){
     const { data: fb } = await sb.from('feedback').select('target_login, created_at').gt('created_at', since);
     (fb || []).forEach(r => { const t = new Date(r.created_at).getTime(); if(!state.feedback[r.target_login] || t > state.feedback[r.target_login]) state.feedback[r.target_login] = t; });
   }catch(e){}
+  state.discovered = {};
+  try{
+    const { data: fl } = await sb.from('follows').select('target_login');
+    (fl || []).forEach(r => { state.discovered[r.target_login] = true; });
+  }catch(e){}
   updatePointsDisplay();
 }
 function updatePointsDisplay(){
@@ -645,8 +670,47 @@ async function loadFollowedLive(){
   liveData = streams.map(s => mapStream(s, avatars));
 }
 
+// ---- live auto-refresh (so you never have to reload to see updated viewer counts) ----
+async function refreshActive(manual){
+  if(!me) return;
+  const btn = document.getElementById('refreshBtn');
+  if(btn) btn.classList.add('spin');
+  try{
+    if(dataMode === 'follows'){ await loadFollowedLive(); render(); if(manual) toast('Live list updated', '↻'); }
+    else if(dataMode === 'browse' && browseGameId && manual){ await fetchCategory(browseGameId, browseLabel, true); toast('Live list updated', '↻'); }
+  }catch(e){
+    if(e.message === 'expired') showBanner('warn', 'Your Twitch session expired — hit Connect Twitch.');
+  }finally{
+    if(btn) setTimeout(()=>btn.classList.remove('spin'), 600);
+  }
+}
+function startAutoRefresh(){
+  if(autoTimer) clearInterval(autoTimer);
+  autoTimer = setInterval(()=>{ if(!document.hidden) refreshActive(false); }, 60000);
+}
+
 // ---- Discover: browse the smallest live streamers in a category ----
 const BROWSE_PAGES = 6;   // up to 600 channels; reaches the end of niche categories
+
+async function fetchCategory(gameId, gameName, quiet){
+  let streams = [], cursor = '', pages = 0, reachedEnd = false;
+  while(pages < BROWSE_PAGES){
+    const res = await tw('/streams?game_id=' + gameId + '&first=100' + (cursor ? '&after=' + cursor : ''));
+    streams = streams.concat(res.data || []);
+    cursor = res.pagination && res.pagination.cursor;
+    pages++;
+    if(!cursor){ reachedEnd = true; break; }
+  }
+  browseGameId = gameId; browseLabel = gameName;
+  if(!streams.length){ browseData = []; render(); if(!quiet) showBanner('info', 'Nobody is live in “' + gameName + '” right now. Try another category.'); return; }
+  const avatars = await fetchAvatars(streams.slice().sort((a,b)=>a.viewer_count-b.viewer_count).slice(0,100));
+  browseData = streams.map(s => mapStream(s, avatars));
+  if(!quiet){ state.platform = 'all'; state.cat = 'all'; }
+  buildChips(); render();
+  if(!quiet) showBanner('ok', reachedEnd
+    ? 'Found ' + streams.length + ' live in “' + gameName + '” — every one of them, smallest first. The folks at the top of this list need you most.'
+    : 'Showing the smallest of ' + streams.length + '+ live in “' + gameName + '”. For truly tiny streamers, try a more niche category.');
+}
 
 async function browseCategory(){
   const input = document.getElementById('browseInput');
@@ -656,28 +720,10 @@ async function browseCategory(){
   btn.disabled = true; btn.textContent = 'Searching…';
   showBanner('info', 'Finding the smallest streamers in “' + q + '”…');
   try{
-    // 1. resolve the category name -> id
     const cat = await tw('/search/categories?query=' + encodeURIComponent(q) + '&first=1');
     const game = cat.data && cat.data[0];
     if(!game){ showBanner('warn', 'No Twitch category matched “' + q + '”. Try the exact name, e.g. "Stardew Valley".'); return; }
-    browseLabel = game.name;
-    // 2. page through the live streams for that category
-    let streams = [], cursor = '', pages = 0, reachedEnd = false;
-    while(pages < BROWSE_PAGES){
-      const res = await tw('/streams?game_id=' + game.id + '&first=100' + (cursor ? '&after=' + cursor : ''));
-      streams = streams.concat(res.data || []);
-      cursor = res.pagination && res.pagination.cursor;
-      pages++;
-      if(!cursor){ reachedEnd = true; break; }
-    }
-    if(!streams.length){ showBanner('info', 'Nobody is live in “' + game.name + '” right now. Try another category.'); browseData = []; render(); return; }
-    const avatars = await fetchAvatars(streams.slice().sort((a,b)=>a.viewer_count-b.viewer_count).slice(0,100));
-    browseData = streams.map(s => mapStream(s, avatars));
-    state.platform = 'all'; state.cat = 'all';
-    buildChips(); render();
-    showBanner('ok', reachedEnd
-      ? 'Found ' + streams.length + ' live in “' + game.name + '” — every one of them, smallest first. The folks at the top of this list need you most.'
-      : 'Showing the smallest of ' + streams.length + '+ live in “' + game.name + '”. For truly tiny streamers, try a more niche category.');
+    await fetchCategory(game.id, game.name, false);
   }catch(e){
     if(e.message === 'expired') showBanner('warn', 'Your Twitch session expired — connect again.');
     else showBanner('warn', "Couldn't browse that category: " + e.message);
@@ -688,9 +734,10 @@ async function browseCategory(){
 
 async function disconnectTwitch(){
   try{ await sb.auth.signOut(); }catch(e){}
-  token = null; me = null; liveData = null; browseData = null; dataMode = 'follows';
+  if(autoTimer){ clearInterval(autoTimer); autoTimer = null; }
+  token = null; me = null; liveData = null; browseData = null; browseGameId = null; dataMode = 'follows';
   booted = false; clearToken();
-  state.points = 0; state.supported = {}; state.feedback = {};
+  state.points = 0; state.supported = {}; state.feedback = {}; state.discovered = {}; armedDiscovery = {};
   updatePointsDisplay();
   document.getElementById('browseBar').style.display = 'none';
   document.querySelector('.you-name').textContent = 'you';
@@ -771,13 +818,16 @@ function thumbBg(s){
 function avaBg(s){const h=hue(s.handle+'x'); return `linear-gradient(135deg, hsl(${h} 55% 55%), hsl(${(h+50)%360} 60% 42%))`;}
 
 // state
-let state = {platform:'all', cat:'all', sort:'small', q:'', supported:{}, feedback:{}, points:0};
+let state = {platform:'all', cat:'all', sort:'small', q:'', supported:{}, feedback:{}, discovered:{}, points:0};
 const fmt = n => n>=1000 ? (n/1000).toFixed(1)+'k' : n;
+let armedDiscovery = {};   // handle -> true once they've opened the channel and can claim
+let browseGameId = null;   // last browsed category, so we can auto-refresh it
+let autoTimer = null;      // live auto-refresh timer
 
 // ---- points integrity (prototype-level; true verification needs the backend) ----
 const DWELL_MS = 11 * 60000;        // must keep the page open ~11 min (1 for ads + ~10 before a view registers)
 const COOLDOWN_MS = 6 * 3600000;    // can earn from the same streamer again after 6 hours
-let pending = {};                   // handle -> {startedAt, timer, item}  (in memory only; lost on refresh by design)
+let pending = {};                   // handle -> {startedAt, timer, item}
 
 function supportState(handle){
   if(pending[handle]) return 'pending';
@@ -789,6 +839,11 @@ function feedbackState(handle){
   const e = state.feedback[handle];
   return (e && (Date.now() - e) < COOLDOWN_MS) ? 'done' : 'open';
 }
+function discoveryState(handle){
+  if(state.discovered[handle]) return 'done';   // once per streamer, ever
+  if(armedDiscovery[handle]) return 'armed';
+  return 'open';
+}
 function cooldownLeft(handle){
   const e = state.supported[handle]; if(!e) return '';
   const r = COOLDOWN_MS - (Date.now() - e);
@@ -799,6 +854,30 @@ function cooldownLeft(handle){
 function fmtTime(ms){
   const s = Math.max(0, Math.ceil(ms/1000));
   return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0');
+}
+
+// ---- watch sessions survive a refresh (only while genuinely still watching) ----
+// We heartbeat lastSeen every few seconds. On reload, a watch resumes only if the page
+// was alive moments ago (a refresh) — closing the tab for a while ends it, as intended.
+function persistWatching(){
+  const o = {};
+  Object.keys(pending).forEach(h=>{ const p = pending[h]; o[h] = { startedAt:p.startedAt, lastSeen:Date.now(), item:p.item }; });
+  try{ Object.keys(o).length ? localStorage.setItem('lineup_watching', JSON.stringify(o)) : localStorage.removeItem('lineup_watching'); }catch(e){}
+}
+function resumeWatches(){
+  let saved = {};
+  try{ saved = JSON.parse(localStorage.getItem('lineup_watching') || '{}'); }catch(e){}
+  const now = Date.now();
+  Object.keys(saved).forEach(h=>{
+    const w = saved[h];
+    const aliveRecently = (now - (w.lastSeen || 0)) < 25000;       // page was open <25s ago → a refresh
+    const withinWindow = (now - w.startedAt) < DWELL_MS + 4000;
+    if(aliveRecently && withinWindow){
+      pending[h] = { startedAt:w.startedAt, item:w.item, timer:null };
+      pending[h].timer = setInterval(()=>watchTick(h), 1000);
+    }
+  });
+  persistWatching();   // prunes any that didn't resume
 }
 
 // points + cooldowns now live in the shared database (loaded in loadMyState, written by award_points)
@@ -855,6 +934,7 @@ function render(){
     const p = PLATFORMS[s.platform];
     const ss = supportState(s.handle);
     const fbDone = feedbackState(s.handle) === 'done';
+    const ds = discoveryState(s.handle);
     const thumbStyle = s.thumb ? `background-image:url('${s.thumb}'); background-size:cover; background-position:center` : `background:${thumbBg(s)}`;
     const avaStyle = s.avatar ? `background-image:url('${s.avatar}'); background-size:cover` : `background:${avaBg(s)}`;
     const display = s.name || s.handle;
@@ -870,6 +950,18 @@ function render(){
     } else {
       label = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12h14M13 6l6 6-6 6"/></svg> Watch + support';
     }
+    // discovery button
+    let dCls = 'subbtn disc', dDis = '', dLabel;
+    if(ds === 'done'){ dCls += ' done'; dDis = 'disabled';
+      dLabel = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg> Discovered';
+    } else if(ds === 'armed'){ dCls += ' armed';
+      dLabel = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg> Claim discovery';
+    } else {
+      dLabel = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M9.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM19 8v6M22 11h-6"/></svg> Discover';
+    }
+    const fbLabel = fbDone
+      ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg> Feedback'
+      : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Feedback';
     return `<article class="card">
       <div class="thumb" style="${thumbStyle}">
         <span class="live-pill"><span class="ld"></span>LIVE</span>
@@ -890,11 +982,10 @@ function render(){
         <div class="tags">${tagHtml}</div>
         <div class="card-actions">
           <button id="sup-${s.handle}" class="${btnCls}" onclick="support('${s.handle}')" ${dis}><span class="sup-label">${label}</span></button>
-          <button class="fb-btn ${fbDone?'done':''}" onclick="openFeedback('${s.handle}')" title="${fbDone?'Feedback sent':'Leave feedback (+5)'}" ${fbDone?'disabled':''} aria-label="Leave feedback">
-            ${fbDone
-              ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg>'
-              : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>'}
-          </button>
+        </div>
+        <div class="card-sub">
+          <button id="disc-${s.handle}" class="${dCls}" onclick="discover('${s.handle}')" ${dDis} title="${ds==='done'?'Discovery counted':'Follow while live to earn +8'}"><span class="disc-label">${dLabel}</span></button>
+          <button class="subbtn fb ${fbDone?'done':''}" onclick="openFeedback('${s.handle}')" ${fbDone?'disabled':''} title="${fbDone?'Feedback sent':'Leave feedback (+5)'}">${fbLabel}</button>
         </div>
       </div>
     </article>`;
@@ -909,21 +1000,25 @@ function support(handle){
   startWatch(handle, item);
 }
 function startWatch(handle, item){
-  pending[handle] = { startedAt: Date.now(), item };
-  pending[handle].timer = setInterval(()=>{
-    const pn = pending[handle]; if(!pn) return;
-    const remain = DWELL_MS - (Date.now() - pn.startedAt);
-    if(remain <= 0){ finishWatch(handle); return; }
-    const lbl = document.querySelector('#sup-' + handle + ' .sup-label');
-    if(lbl) lbl.textContent = 'Watching… ' + fmtTime(remain);
-  }, 1000);
+  pending[handle] = { startedAt: Date.now(), item: item ? {handle, name:item.name, url:item.url} : {handle} };
+  pending[handle].timer = setInterval(()=>watchTick(handle), 1000);
+  persistWatching();
   render();
+}
+function watchTick(handle){
+  const pn = pending[handle]; if(!pn) return;
+  const remain = DWELL_MS - (Date.now() - pn.startedAt);
+  if(remain <= 0){ finishWatch(handle); return; }
+  if(Math.round(remain/1000) % 5 === 0) persistWatching();   // heartbeat (throttled)
+  const lbl = document.querySelector('#sup-' + handle + ' .sup-label');
+  if(lbl) lbl.textContent = 'Watching… ' + fmtTime(remain);
 }
 async function finishWatch(handle){
   const pn = pending[handle]; if(!pn) return;
   clearInterval(pn.timer);
   const item = pn.item;
   delete pending[handle];
+  persistWatching();
   render();
   try{
     const { data, error } = await sb.rpc('award_points', { p_kind: 'watch', p_target: handle });
@@ -944,9 +1039,56 @@ async function finishWatch(handle){
 }
 // award snappily when the user returns to this tab after watching elsewhere
 document.addEventListener('visibilitychange', ()=>{
-  if(document.hidden) return;
+  if(document.hidden){ persistWatching(); return; }
   Object.keys(pending).forEach(h=>{ if(Date.now() - pending[h].startedAt >= DWELL_MS) finishWatch(h); });
 });
+
+// ---- Discovery points (+8): follow a creator you found here, while they're live ----
+async function discover(handle){
+  const st = discoveryState(handle);
+  if(st === 'done') return;
+  const item = getActiveList().find(x=>x.handle===handle);
+  if(!item) return;
+  if(st === 'open'){
+    if(item.url) window.open(item.url, '_blank', 'noopener');   // open their channel so they can follow there
+    armedDiscovery[handle] = true;
+    render();
+    showBanner('info', 'Follow ' + (item.name || handle) + " on Twitch while they're live, then tap “Claim discovery”.");
+    return;
+  }
+  await claimDiscovery(handle, item);
+}
+async function claimDiscovery(handle, item){
+  const lbl = document.querySelector('#disc-' + handle + ' .disc-label');
+  if(lbl) lbl.textContent = 'Checking…';
+  try{
+    let live = false;
+    try{ const s = await tw('/streams?user_id=' + item.id); live = !!(s.data && s.data.length); }catch(e){}
+    if(!live){ showBanner('warn', (item.name||handle) + " isn't live right now — discovery only counts while they're live."); render(); return; }
+
+    let follows = false;
+    try{ const f = await tw('/channels/followed?user_id=' + me.id + '&broadcaster_id=' + item.id); follows = !!(f.data && f.data.length); }catch(e){}
+    if(!follows){ showBanner('info', 'Follow ' + (item.name||handle) + ' on Twitch first, then tap Claim again.'); render(); return; }
+
+    const { data, error } = await sb.rpc('award_follow', { p_target: handle });
+    if(error){
+      const m = (error.message || '').toLowerCase();
+      if(m.includes('already')){ state.discovered[handle] = true; delete armedDiscovery[handle]; render(); showBanner('info', 'You already earned discovery points for them.'); return; }
+      if(m.includes('daily')){ showBanner('info', "You've hit today's discovery limit — back tomorrow."); render(); return; }
+      throw error;
+    }
+    state.points = data;
+    state.discovered[handle] = true;
+    delete armedDiscovery[handle];
+    updatePointsDisplay();
+    renderLeaderboard();
+    toast(`You discovered <b>${item.name||handle}</b>`, '+8');
+    render();
+  }catch(e){
+    showBanner('warn', "Couldn't verify that follow — try again in a moment.");
+    render();
+  }
+}
 
 // ---- VOD feedback (+5) ----
 let fbHandle = null;
