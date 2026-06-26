@@ -68,6 +68,15 @@
     padding:9px 16px; border-radius:11px; transition:transform .12s, filter .12s;
   }
   .golive:hover{filter:brightness(1.07)} .golive:active{transform:scale(.97)}
+  .golive.listed{background:var(--surface-2); color:var(--good); border:1px solid rgba(61,220,151,.4)}
+  .offline-list, #offlineList{margin-top:26px}
+  .offline-title{font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--faint); font-weight:600; margin-bottom:12px}
+  .offline-row{display:flex; align-items:center; gap:11px; padding:9px 11px; border:1px solid var(--border); border-radius:11px; background:var(--surface); margin-bottom:8px; transition:border-color .12s}
+  .offline-row.clickable{cursor:pointer}
+  .offline-row.clickable:hover{border-color:var(--border-2)}
+  .off-ava{width:32px; height:32px; border-radius:50%; flex-shrink:0; border:1.5px solid var(--border-2)}
+  .off-name{flex:1; font-size:14px; font-weight:500}
+  .off-pts{font-family:'JetBrains Mono',monospace; font-size:12.5px; color:var(--dim)}
   .avatar-btn{width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg,#FF5C39,#FF3B7C); flex-shrink:0; border:2px solid var(--border-2)}
   .connect{display:flex; align-items:center; gap:8px; background:var(--twitch); color:#fff; font-weight:600; font-size:14px; padding:9px 15px; border-radius:11px; transition:filter .12s, transform .12s; white-space:nowrap}
   .connect:hover{filter:brightness(1.08)} .connect:active{transform:scale(.97)}
@@ -435,6 +444,7 @@
         </button>
       </div>
       <div class="grid" id="grid"></div>
+      <div id="offlineList" style="display:none"></div>
     </div>
 
     <aside class="rail">
@@ -533,8 +543,11 @@ let booted = false;        // guard so we only boot the session once
 function getActiveList(){
   if(dataMode === 'follows' && liveData) return liveData;
   if(dataMode === 'browse' && browseData) return browseData;
+  if(dataMode === 'lineup') return lineupLive;
   return [];
 }
+let lineupLive = [];      // listed members who are live right now (rendered as cards)
+let lineupOffline = [];   // listed members currently offline
 
 // shared: Twitch stream object -> card shape
 function mapStream(s, avatars){
@@ -625,6 +638,7 @@ async function afterConnect(){
     await loadFollowing();
 
     await checkMine();          // sets myLive + renders status + collab panel
+    renderGoLive();
     renderLeaderboard();
     await loadCollabs();
     await loadFollowedLive();
@@ -734,8 +748,9 @@ async function confirmCollab(id, inviterLogin){
 async function loadMyState(){
   try{
     const uid = (await sb.auth.getUser()).data.user.id;
-    const { data: prof } = await sb.from('profiles').select('points').eq('id', uid).single();
+    const { data: prof } = await sb.from('profiles').select('points, listed_at').eq('id', uid).single();
     state.points = (prof && prof.points) || 0;
+    state.listed = !!(prof && prof.listed_at);
   }catch(e){ state.points = 0; }
   state.supported = {}; state.feedback = {};
   const since = new Date(Date.now() - COOLDOWN_MS).toISOString();
@@ -789,6 +804,7 @@ async function refreshActive(manual){
   try{
     if(dataMode === 'follows'){ await loadFollowedLive(); render(); if(manual) toast('Live list updated', '↻'); }
     else if(dataMode === 'browse' && browseGameId && manual){ await fetchCategory(browseGameId, browseLabel, true); toast('Live list updated', '↻'); }
+    else if(dataMode === 'lineup'){ await loadLineup(); render(); renderOffline(); if(manual) toast('Lineup updated', '↻'); }
     try{ await checkMine(); await loadCollabs(); }catch(e){}
   }catch(e){
     if(e.message === 'expired') showBanner('warn', 'Your Twitch session expired — hit Connect Twitch.');
@@ -850,8 +866,10 @@ async function disconnectTwitch(){
   token = null; me = null; liveData = null; browseData = null; browseGameId = null; dataMode = 'follows';
   booted = false; clearToken();
   state.points = 0; state.supported = {}; state.feedback = {}; state.discovered = {}; armedDiscovery = {}; alreadyFollow = {};
-  myLive = false; collabInvites = [];
+  myLive = false; collabInvites = []; state.listed = false; lineupLive = []; lineupOffline = [];
   document.getElementById('collabPanel').style.display = 'none';
+  document.getElementById('offlineList').style.display = 'none';
+  renderGoLive();
   updatePointsDisplay();
   document.getElementById('browseBar').style.display = 'none';
   document.querySelector('.you-name').textContent = 'you';
@@ -895,20 +913,28 @@ function buildSrcToggle(){
   if(!me){ el.innerHTML = ''; return; }
   el.innerHTML = '<span class="src-toggle">'
     + '<button class="' + (dataMode==='follows'?'on':'') + '" onclick="setMode(\'follows\')">My follows</button>'
+    + '<button class="' + (dataMode==='lineup'?'on':'') + '" onclick="setMode(\'lineup\')">Lineup</button>'
     + '<button class="' + (dataMode==='browse'?'on':'') + '" onclick="setMode(\'browse\')">Discover</button></span>';
 }
 function setMode(m){
   dataMode = m;
   document.getElementById('browseBar').style.display = (m==='browse') ? 'flex' : 'none';
+  document.getElementById('offlineList').style.display = (m==='lineup') ? 'block' : 'none';
   state.platform='all';
   if(m==='browse' && !browseData){
     showBanner('info', 'Pick a category below to discover the smallest streamers live in it right now.');
+  } else if(m==='lineup'){
+    showBanner('info', 'Loading members on the lineup…');
+    loadLineup().then(()=>{ buildChips(); render(); renderOffline();
+      showBanner('ok', lineupLive.length
+        ? 'Lineup members who are live right now — featured below.'
+        : 'No members are live this second. Tap “Go live” when you stream to be featured here.'); });
   } else if(m==='follows'){
     showBanner('ok', liveData && liveData.length
       ? 'The channels you follow that are live right now.'
       : 'None of the channels you follow are live this second.');
   }
-  buildSrcToggle(); buildChips(); render();
+  buildSrcToggle(); buildChips(); render(); renderOffline();
 }
 
 function showBanner(kind, html){
@@ -932,7 +958,7 @@ function thumbBg(s){
 function avaBg(s){const h=hue(s.handle+'x'); return `linear-gradient(135deg, hsl(${h} 55% 55%), hsl(${(h+50)%360} 60% 42%))`;}
 
 // state
-let state = {platform:'all', cat:'all', sort:'small', q:'', supported:{}, feedback:{}, discovered:{}, points:0};
+let state = {platform:'all', cat:'all', sort:'small', q:'', supported:{}, feedback:{}, discovered:{}, points:0, listed:false};
 const fmt = n => n>=1000 ? (n/1000).toFixed(1)+'k' : n;
 let armedDiscovery = {};   // handle -> true once they've opened the channel and can claim
 let alreadyFollow = {};    // login -> true for channels the user already follows (no discovery shown)
@@ -1040,6 +1066,8 @@ function render(){
     let msg;
     if(!me)
       msg = `<div class="empty"><b>Connect Twitch to begin</b>Hit <span style="color:var(--twitch)">Connect Twitch</span> up top to fill the lineup with live streamers — your follows, or any category you want to explore.</div>`;
+    else if(dataMode==='lineup')
+      msg = `<div class="empty"><b>No members are live right now</b>When you go live, tap <span style="color:var(--good)">Go live</span> up top to be featured here. Members who've listed themselves but are offline show below.</div>`;
     else if(dataMode==='browse')
       msg = `<div class="empty"><b>Pick a category to start discovering</b>Search a game or category above to surface the smallest streamers live in it right now.</div>`;
     else
@@ -1268,8 +1296,67 @@ async function submitFeedback(){
 }
 document.getElementById('fbText').addEventListener('input', updateFbCount);
 document.getElementById('fbModal').addEventListener('click', e=>{ if(e.target.id === 'fbModal') closeFeedback(); });
-function goLive(){
-  toast(`This would post your stream to the lineup`, 'LIVE');
+async function goLive(){
+  if(!me) return;
+  try{
+    if(state.listed){
+      await sb.rpc('go_offline'); state.listed = false;
+      showBanner('info', "You've left the lineup.");
+    } else {
+      await sb.rpc('go_live'); state.listed = true;
+      showBanner('ok', myLive
+        ? "You're on the lineup — live and featured for others to find."
+        : "You're on the lineup. Go live on Twitch and you'll be featured at the top.");
+    }
+    renderGoLive();
+    if(dataMode === 'lineup'){ await loadLineup(); render(); renderOffline(); }
+  }catch(e){ showBanner('warn', "Couldn't update your lineup status — try again."); }
+}
+function renderGoLive(){
+  const btn = document.querySelector('.golive');
+  if(!btn) return;
+  if(!me){ btn.style.display = 'none'; return; }
+  btn.style.display = '';
+  btn.textContent = state.listed ? '✓ On lineup' : 'Go live';
+  btn.classList.toggle('listed', !!state.listed);
+}
+
+// ---- Lineup tab: members who listed themselves; live ones featured ----
+async function loadLineup(){
+  let members = [];
+  try{
+    const { data } = await sb.from('profiles')
+      .select('twitch_login, display_name, avatar, points, listed_at')
+      .not('listed_at', 'is', null)
+      .order('points', { ascending:false })
+      .limit(100);
+    members = (data || []).filter(m => m.twitch_login);
+  }catch(e){}
+  if(!members.length){ lineupLive = []; lineupOffline = []; return; }
+  const logins = members.map(m => m.twitch_login.toLowerCase());
+  let liveStreams = [];
+  try{
+    const qs = logins.map(l => 'user_login=' + encodeURIComponent(l)).join('&');
+    const res = await tw('/streams?first=100&' + qs);
+    liveStreams = res.data || [];
+  }catch(e){}
+  const liveByLogin = {}; liveStreams.forEach(s => { liveByLogin[s.user_login.toLowerCase()] = true; });
+  const avatars = await fetchAvatars(liveStreams);
+  lineupLive = liveStreams.map(s => mapStream(s, avatars));
+  lineupOffline = members.filter(m => !liveByLogin[m.twitch_login.toLowerCase()]);
+}
+function renderOffline(){
+  const el = document.getElementById('offlineList');
+  if(!el) return;
+  if(dataMode !== 'lineup' || !lineupOffline.length){ el.innerHTML = ''; el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  el.innerHTML = '<div class="offline-title">Also on the lineup · offline</div>' + lineupOffline.map(m=>{
+    const name = m.display_name || m.twitch_login;
+    const url = 'https://twitch.tv/' + m.twitch_login;
+    const bg = m.avatar ? `background-image:url('${m.avatar}'); background-size:cover`
+                        : `background:linear-gradient(135deg, hsl(${hue(name)} 55% 55%), hsl(${(hue(name)+50)%360} 60% 42%))`;
+    return `<div class="offline-row clickable" onclick="window.open('${url}','_blank','noopener')"><span class="off-ava" style="${bg}"></span><span class="off-name">${name}</span><span class="off-pts">${m.points} pts</span></div>`;
+  }).join('');
 }
 function toast(html, pts){
   const wrap = document.getElementById('toasts');
