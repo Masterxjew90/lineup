@@ -125,7 +125,7 @@
   .browse-bar button{background:var(--accent); color:#fff; font-weight:600; font-size:13.5px; padding:9px 15px; border-radius:9px; white-space:nowrap; transition:filter .12s}
   .browse-bar button:hover{filter:brightness(1.07)}
   .browse-bar button:disabled{opacity:.6; cursor:default}
-  @media(max-width:980px){ .main{grid-template-columns:1fr} .rail{order:-1} }
+  @media(max-width:980px){ .main{grid-template-columns:1fr} .rail{position:static; top:auto; order:1} .feed{order:0} }
 
   /* ---------- Grid ---------- */
   .countline{font-size:13px; color:var(--faint); margin-bottom:14px; font-family:'JetBrains Mono',monospace}
@@ -289,7 +289,6 @@
   <div class="lp-inner">
     <nav class="lp-nav">
       <div class="brand"><span class="brand-dot"></span><span class="brand-name">Line<span>up</span></span></div>
-      <button class="lp-navbtn" onclick="connectTwitch()">Connect Twitch</button>
     </nav>
 
     <section class="lp-hero">
@@ -306,19 +305,16 @@
     <div class="lp-title">How it works</div>
     <section class="lp-steps">
       <div class="lp-step">
-        <div class="num">01</div>
         <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></div>
         <h3>Discover</h3>
         <p>Browse who's live this second — sorted smallest first, so the streamers nobody's found yet sit right at the top.</p>
       </div>
       <div class="lp-step">
-        <div class="num">02</div>
         <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-4.3-9.5-8.5C1 9 2.5 5.5 6 5.5c2 0 3.2 1.2 4 2.3.8-1.1 2-2.3 4-2.3 3.5 0 5 3.5 3.5 7C19 16.7 12 21 12 21z"/></svg></div>
         <h3>Show up</h3>
         <p>Genuinely watch — points only land after real watch time, never for a drive-by click. Leave kind, useful feedback for bonus points.</p>
       </div>
       <div class="lp-step">
-        <div class="num">03</div>
         <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 4H4v2a3 3 0 0 0 3 3M17 4h3v2a3 3 0 0 1-3 3"/></svg></div>
         <h3>Climb</h3>
         <p>Rack up points, rise on the shared leaderboard, and get discovered yourself as the community grows around you.</p>
@@ -348,9 +344,7 @@
 
     <section class="lp-final">
       <h2>Ready to show up for someone?</h2>
-      <div class="lp-cta">
-        <button class="lp-connect" onclick="connectTwitch()"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M4 3 3 6v12h4v3h3l3-3h4l5-5V3H4zm16 9-3 3h-4l-3 3v-3H6V5h14v7zM15 8h-2v5h2V8zm-5 0H8v5h2V8z"/></svg> Connect with Twitch</button>
-      </div>
+      <p style="color:var(--dim); font-size:15px; max-width:480px; margin:0 auto">Scroll back up and hit <b style="color:var(--text)">Connect with Twitch</b> to find a small streamer who's live right now.</p>
     </section>
 
     <footer class="lp-foot">
