@@ -194,6 +194,7 @@
   .support.pending{background:rgba(245,166,35,.12); border-color:rgba(245,166,35,.42); color:#F0B45A; cursor:default}
   .support.pending:hover{background:rgba(245,166,35,.12); color:#F0B45A}
   .card-actions{margin-top:auto; display:flex; gap:8px}
+  .self-tag{margin-top:auto; display:flex; align-items:center; justify-content:center; gap:7px; background:var(--surface-2); border:1px solid var(--border-2); border-radius:10px; padding:9px; font-size:12.5px; font-weight:600; color:var(--good)}
   .card-actions .support{margin-top:0; flex:1; width:auto}
   .card-sub{display:flex; gap:8px; margin-top:8px}
   .subbtn{flex:1; display:flex; align-items:center; justify-content:center; gap:6px; background:var(--surface-2); border:1px solid var(--border-2); border-radius:10px; padding:8px; font-size:12.5px; font-weight:600; color:var(--dim); transition:all .12s}
@@ -1080,6 +1081,7 @@ function render(){
     const ss = supportState(s.handle);
     const fbDone = feedbackState(s.handle) === 'done';
     const ds = discoveryState(s.handle);
+    const isSelf = me && s.handle && s.handle.toLowerCase() === me.login.toLowerCase();
     const thumbStyle = s.thumb ? `background-image:url('${s.thumb}'); background-size:cover; background-position:center` : `background:${thumbBg(s)}`;
     const avaStyle = s.avatar ? `background-image:url('${s.avatar}'); background-size:cover` : `background:${avaBg(s)}`;
     const display = s.name || s.handle;
@@ -1130,13 +1132,13 @@ function render(){
           </div>
         </div>
         <div class="tags">${tagHtml}</div>
-        <div class="card-actions">
+        ${isSelf ? `<div class="self-tag"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 12 0v1"/></svg> This is you — you're live on the lineup</div>` : `<div class="card-actions">
           <button id="sup-${s.handle}" class="${btnCls}" onclick="support('${s.handle}')" ${dis}><span class="sup-label">${label}</span></button>
         </div>
         <div class="card-sub">
           ${discBtn}
           <button class="subbtn fb ${fbDone?'done':''}" onclick="openFeedback('${s.handle}')" ${fbDone?'disabled':''} title="${fbDone?'Feedback sent':'Leave feedback (+5)'}">${fbLabel}</button>
-        </div>
+        </div>`}
       </div>
     </article>`;
   }).join('');
