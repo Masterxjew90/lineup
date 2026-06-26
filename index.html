@@ -242,9 +242,122 @@
   @keyframes rise{from{transform:translateY(14px); opacity:0} to{transform:translateY(0); opacity:1}}
 
   footer{max-width:1280px; margin:36px auto 0; padding:24px 26px; border-top:1px solid var(--border); color:var(--faint); font-size:12.5px; line-height:1.6}
+
+  /* ---------- Landing ---------- */
+  #landing{position:fixed; inset:0; z-index:120; background:radial-gradient(120% 80% at 50% -10%, #1B1320 0%, var(--bg) 55%); overflow-y:auto}
+  .lp-inner{max-width:1060px; margin:0 auto; padding:0 26px 64px}
+  .lp-nav{display:flex; align-items:center; justify-content:space-between; padding:20px 0}
+  .lp-nav .brand-name{font-family:'Bricolage Grotesque',sans-serif; font-weight:800; font-size:22px; letter-spacing:-.02em}
+  .lp-nav .brand-name span{color:var(--accent)}
+  .lp-navbtn{background:var(--surface-2); border:1px solid var(--border); color:var(--text); font-weight:600; font-size:13.5px; padding:9px 15px; border-radius:10px}
+  .lp-navbtn:hover{border-color:var(--border-2)}
+  .lp-hero{text-align:center; padding:54px 0 8px; max-width:780px; margin:0 auto}
+  .lp-eyebrow{display:inline-block; font-size:12px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:var(--accent); background:rgba(255,92,57,.1); border:1px solid rgba(255,92,57,.28); padding:6px 13px; border-radius:999px; margin-bottom:24px}
+  .lp-hero h1{font-family:'Bricolage Grotesque',sans-serif; font-weight:800; font-size:clamp(32px,5.4vw,52px); line-height:1.05; letter-spacing:-.03em}
+  .lp-hero h1 em{font-style:normal; color:var(--accent)}
+  .lp-hero p{color:var(--dim); font-size:clamp(15px,1.7vw,18px); line-height:1.6; margin:22px auto 0; max-width:610px}
+  .lp-cta{display:flex; align-items:center; justify-content:center; gap:14px; margin-top:32px; flex-wrap:wrap}
+  .lp-connect{display:inline-flex; align-items:center; gap:9px; background:var(--twitch); color:#fff; font-weight:700; font-size:15.5px; padding:14px 24px; border-radius:13px; transition:transform .12s, filter .12s}
+  .lp-connect:hover{filter:brightness(1.08); transform:translateY(-1px)}
+  .lp-connect:active{transform:translateY(0)}
+  .lp-peek{background:none; color:var(--dim); font-weight:600; font-size:14.5px; padding:10px}
+  .lp-peek:hover{color:var(--text)}
+  .lp-trust{margin-top:18px; font-size:13px; color:var(--faint)}
+  .lp-title{text-align:center; font-family:'Bricolage Grotesque',sans-serif; font-weight:700; font-size:12.5px; text-transform:uppercase; letter-spacing:.09em; color:var(--faint); margin:54px 0 22px}
+  .lp-steps{display:grid; grid-template-columns:repeat(3,1fr); gap:16px}
+  .lp-step{background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:24px}
+  .lp-step .num{font-family:'JetBrains Mono',monospace; font-size:12.5px; color:var(--accent); font-weight:700}
+  .lp-step .ic{width:42px; height:42px; border-radius:11px; background:var(--surface-2); display:flex; align-items:center; justify-content:center; color:var(--accent); margin:13px 0}
+  .lp-step h3{font-family:'Bricolage Grotesque',sans-serif; font-size:18px; font-weight:700; letter-spacing:-.01em; margin-bottom:7px}
+  .lp-step p{color:var(--dim); font-size:14px; line-height:1.55}
+  .lp-why{display:grid; grid-template-columns:repeat(3,1fr); gap:20px; margin-top:4px}
+  .lp-why-item{display:flex; gap:13px; align-items:flex-start}
+  .lp-why-item .wic{flex-shrink:0; color:var(--good); margin-top:1px}
+  .lp-why-item h4{font-size:15px; font-weight:700; margin-bottom:5px}
+  .lp-why-item p{color:var(--dim); font-size:13.5px; line-height:1.5}
+  .lp-board{max-width:430px; margin:54px auto 0; background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:20px}
+  .lp-board h3{font-family:'Bricolage Grotesque',sans-serif; font-size:12.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--dim); margin-bottom:14px; text-align:center}
+  .lp-final{text-align:center; margin-top:56px}
+  .lp-final h2{font-family:'Bricolage Grotesque',sans-serif; font-weight:800; font-size:clamp(24px,4vw,34px); letter-spacing:-.025em; margin-bottom:20px}
+  .lp-foot{text-align:center; color:var(--faint); font-size:12.5px; margin-top:48px; line-height:1.6; max-width:540px; margin-left:auto; margin-right:auto}
+  @media(max-width:760px){ .lp-steps,.lp-why{grid-template-columns:1fr} }
 </style>
 </head>
 <body>
+
+<div id="landing">
+  <div class="lp-inner">
+    <nav class="lp-nav">
+      <div class="brand"><span class="brand-dot"></span><span class="brand-name">Line<span>up</span></span></div>
+      <button class="lp-navbtn" onclick="connectTwitch()">Connect Twitch</button>
+    </nav>
+
+    <section class="lp-hero">
+      <span class="lp-eyebrow">For small streamers &amp; the people who root for them</span>
+      <h1>Find a small streamer who's live <em>right now</em> — and actually show up.</h1>
+      <p>Lineup puts the tiniest live streamers first — the ones the big platforms bury. Discover them, genuinely watch, leave real feedback, and climb a leaderboard for showing up. No bots, no bought views — just real people finding real audiences.</p>
+      <div class="lp-cta">
+        <button class="lp-connect" onclick="connectTwitch()"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M4 3 3 6v12h4v3h3l3-3h4l5-5V3H4zm16 9-3 3h-4l-3 3v-3H6V5h14v7zM15 8h-2v5h2V8zm-5 0H8v5h2V8z"/></svg> Connect with Twitch</button>
+        <button class="lp-peek" onclick="dismissLanding()">Peek inside first →</button>
+      </div>
+      <div class="lp-trust">Free forever · works with your Twitch account · safe under Twitch's rules</div>
+    </section>
+
+    <div class="lp-title">How it works</div>
+    <section class="lp-steps">
+      <div class="lp-step">
+        <div class="num">01</div>
+        <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></div>
+        <h3>Discover</h3>
+        <p>Browse who's live this second — sorted smallest first, so the streamers nobody's found yet sit right at the top.</p>
+      </div>
+      <div class="lp-step">
+        <div class="num">02</div>
+        <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-4.3-9.5-8.5C1 9 2.5 5.5 6 5.5c2 0 3.2 1.2 4 2.3.8-1.1 2-2.3 4-2.3 3.5 0 5 3.5 3.5 7C19 16.7 12 21 12 21z"/></svg></div>
+        <h3>Show up</h3>
+        <p>Genuinely watch — points only land after real watch time, never for a drive-by click. Leave kind, useful feedback for bonus points.</p>
+      </div>
+      <div class="lp-step">
+        <div class="num">03</div>
+        <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 4H4v2a3 3 0 0 0 3 3M17 4h3v2a3 3 0 0 1-3 3"/></svg></div>
+        <h3>Climb</h3>
+        <p>Rack up points, rise on the shared leaderboard, and get discovered yourself as the community grows around you.</p>
+      </div>
+    </section>
+
+    <div class="lp-title">Why Lineup is different</div>
+    <section class="lp-why">
+      <div class="lp-why-item">
+        <span class="wic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg></span>
+        <div><h4>Real people, not bots</h4><p>Every viewer is a person who chose to show up. No fake numbers, no bought views — the opposite of a viewbot.</p></div>
+      </div>
+      <div class="lp-why-item">
+        <span class="wic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10M6 20v-6M18 20V4"/></svg></span>
+        <div><h4>The little guy first</h4><p>The smallest streamers sit at the top of the list, not buried under the giants the big sites always push.</p></div>
+      </div>
+      <div class="lp-why-item">
+        <span class="wic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/></svg></span>
+        <div><h4>Safe &amp; free</h4><p>Plays fully by Twitch's rules, so nobody risks their account — and it costs nothing to join.</p></div>
+      </div>
+    </section>
+
+    <div class="lp-board" id="lpBoard" style="display:none">
+      <h3>Top supporters right now</h3>
+      <div class="lb" id="lpBoardList"></div>
+    </div>
+
+    <section class="lp-final">
+      <h2>Ready to show up for someone?</h2>
+      <div class="lp-cta">
+        <button class="lp-connect" onclick="connectTwitch()"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M4 3 3 6v12h4v3h3l3-3h4l5-5V3H4zm16 9-3 3h-4l-3 3v-3H6V5h14v7zM15 8h-2v5h2V8zm-5 0H8v5h2V8z"/></svg> Connect with Twitch</button>
+      </div>
+    </section>
+
+    <footer class="lp-foot">
+      Lineup connects to Twitch only to show you who's live and read your follows. It never streams, posts, or acts on your behalf. Built to help small streamers get seen.
+    </footer>
+  </div>
+</div>
 
 <div class="topbar">
   <div class="brand">
@@ -426,6 +539,30 @@ async function fetchAvatars(streams){
   return avatars;
 }
 
+// ---- landing page control ----
+function hideLanding(){ const l = document.getElementById('landing'); if(l) l.style.display = 'none'; }
+function showLanding(){ const l = document.getElementById('landing'); if(l){ l.style.display = 'block'; renderLandingBoard(); } }
+function dismissLanding(){ hideLanding(); }   // "peek inside" without signing in
+async function renderLandingBoard(){
+  const wrap = document.getElementById('lpBoard'); const list = document.getElementById('lpBoardList');
+  if(!wrap) return;
+  let rows = [];
+  try{
+    const { data } = await sb.from('profiles').select('display_name, avatar, points, twitch_login').order('points', { ascending:false }).limit(5);
+    rows = (data || []).filter(r => r.points > 0);
+  }catch(e){}
+  if(!rows.length){ wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  list.innerHTML = rows.map((r,i)=>{
+    const rank = i+1; const name = r.display_name || r.twitch_login || 'streamer';
+    const url = r.twitch_login ? 'https://twitch.tv/' + r.twitch_login : null;
+    const bg = r.avatar ? `background-image:url('${r.avatar}'); background-size:cover`
+                        : `background:linear-gradient(135deg, hsl(${hue(name)} 55% 55%), hsl(${(hue(name)+50)%360} 60% 42%))`;
+    const click = url ? `class="lb-row ${rank<=3?'top'+rank:''} clickable" onclick="window.open('${url}','_blank','noopener')"` : `class="lb-row ${rank<=3?'top'+rank:''}"`;
+    return `<div ${click}><span class="lb-num">${rank}</span><span class="lb-ava" style="${bg}"></span><span class="lb-name">${name}</span><span class="lb-pts">${r.points}</span></div>`;
+  }).join('');
+}
+
 async function connectTwitch(){
   showBanner('info', 'Opening Twitch sign-in…');
   const { error } = await sb.auth.signInWithOAuth({
@@ -453,6 +590,7 @@ async function afterConnect(){
     const u = await tw('/users');
     me = u.data && u.data[0];
     if(!me) throw new Error('no user returned');
+    hideLanding();
 
     // sync profile + pull points and cooldowns from the shared database
     await syncProfile();
@@ -567,6 +705,7 @@ async function disconnectTwitch(){
   ava.style.backgroundImage = 'none';
   ava.style.background = 'linear-gradient(135deg,#FF5C39,#FF3B7C)';
   renderAuthSlot(); buildSrcToggle(); buildChips(); renderLeaderboard(); render();
+  showLanding();
   showBanner('info', 'Disconnected. Connect Twitch to load live streamers again.');
 }
 
@@ -931,7 +1070,11 @@ renderAuthSlot();
 buildSrcToggle();
 buildChips();
 renderLeaderboard();   // shows the shared board even before you log in
+renderLandingBoard();  // live top-supporters on the welcome screen
 render();
+
+// returning logged-in visitors: hide the welcome screen right away (no flash)
+sb.auth.getSession().then(({ data })=>{ if(data && data.session) hideLanding(); });
 
 // Supabase tells us when a session appears (fresh login or restored on refresh)
 sb.auth.onAuthStateChange((event, session)=>{
