@@ -86,6 +86,16 @@
   .src-toggle{display:inline-flex; background:var(--surface); border:1px solid var(--border); border-radius:999px; padding:3px}
   .src-toggle button{font-size:12.5px; color:var(--dim); padding:6px 13px; border-radius:999px; transition:all .12s}
   .src-toggle button.on{background:var(--text); color:var(--bg); font-weight:600}
+  .collab-amt{margin-left:auto; font-family:'JetBrains Mono',monospace; color:var(--good); font-size:11.5px; font-weight:700}
+  .collab-form{display:flex; gap:7px; margin-top:2px}
+  .collab-form input{flex:1; min-width:0; background:var(--bg); border:1px solid var(--border); border-radius:9px; padding:8px 10px; color:var(--text); font-size:13px; outline:none}
+  .collab-form input:focus{border-color:var(--border-2)}
+  .collab-form button{background:var(--accent); color:#fff; font-weight:600; font-size:12.5px; padding:8px 12px; border-radius:9px; white-space:nowrap; transition:filter .12s}
+  .collab-form button:hover{filter:brightness(1.07)}
+  .collab-invite{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--dim); background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:9px 11px; margin-bottom:8px}
+  .ci-name{font-weight:700; color:var(--text)}
+  .ci-confirm{margin-left:auto; background:var(--good); color:#04130C; font-weight:700; font-size:12px; padding:6px 11px; border-radius:8px; white-space:nowrap; transition:filter .12s}
+  .ci-confirm:hover{filter:brightness(1.06)}
 
   /* ---------- Layout ---------- */
   .wrap{max-width:1280px; margin:0 auto; padding:26px}
@@ -443,6 +453,11 @@
         </div>
       </div>
 
+      <div class="panel" id="collabPanel" style="display:none">
+        <h3>Collab <span class="collab-amt">+20 each</span></h3>
+        <div id="collabBody"></div>
+      </div>
+
       <div class="panel">
         <h3>Top supporters</h3>
         <div class="lb" id="leaderboard"></div>
@@ -455,7 +470,7 @@
           <li><span class="k">+8</span><span>Discover a new creator (follow while they're live)</span></li>
           <li><span class="k">+5</span><span>Leave useful feedback on a VOD</span></li>
           <li><span class="k">+25</span><span>Raid or host another member <em class="soon">soon</em></span></li>
-          <li><span class="k">+20</span><span>Collab with another live member <em class="soon">soon</em></span></li>
+          <li><span class="k">+20</span><span>Collab with another live member</span></li>
         </ul>
         <div class="rail-note" style="margin-top:10px">Points reward genuine discovery and showing up — never buying follows. That's what keeps the whole thing safe under Twitch's rules.</div>
       </div>
@@ -609,16 +624,15 @@ async function afterConnect(){
     await loadMyState();
     await loadFollowing();
 
-    let mineLive = false;
-    try{ const s = await tw('/streams?user_id=' + me.id); mineLive = !!(s.data && s.data.length); }catch(e){}
-    renderMe(mineLive);
+    await checkMine();          // sets myLive + renders status + collab panel
     renderLeaderboard();
+    await loadCollabs();
     await loadFollowedLive();
     dataMode = 'follows'; state.platform = 'all';
     resumeWatches();
     buildSrcToggle(); buildChips(); render();
     startAutoRefresh();
-    showBanner('ok', mineLive
+    showBanner('ok', myLive
       ? "You're live right now — and below are the channels you follow that are live too."
       : (liveData.length
           ? 'Connected. These are the channels you follow that are live right now.'
@@ -633,6 +647,87 @@ async function afterConnect(){
 // write/refresh this user's profile row in Supabase
 async function syncProfile(){
   try{ await sb.rpc('upsert_profile', { p_login: me.login, p_name: me.display_name, p_avatar: me.profile_image_url }); }catch(e){}
+}
+
+// ---- Collaboration (V1): two live members link up, both earn +20 ----
+async function checkMine(){
+  let live = false;
+  try{ const s = await tw('/streams?user_id=' + me.id); live = !!(s.data && s.data.length); }catch(e){}
+  myLive = live;
+  renderMe(live);
+  renderCollab();
+}
+async function loadCollabs(){
+  collabInvites = [];
+  if(!me) return;
+  try{
+    const { data } = await sb.from('collabs')
+      .select('id, inviter_login')
+      .eq('status', 'pending')
+      .eq('invitee_login', me.login.toLowerCase());
+    collabInvites = data || [];
+  }catch(e){}
+  renderCollab();
+}
+function renderCollab(){
+  const panel = document.getElementById('collabPanel');
+  const body = document.getElementById('collabBody');
+  if(!me){ panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  let html = '';
+  collabInvites.forEach(c=>{
+    html += `<div class="collab-invite"><span class="ci-name">${c.inviter_login}</span> wants to collab<button class="ci-confirm" onclick="confirmCollab(${c.id}, '${c.inviter_login}')">Confirm</button></div>`;
+  });
+  if(myLive){
+    html += `<div class="collab-form">
+        <input id="collabInput" placeholder="Their Twitch username" onkeydown="if(event.key==='Enter')sendCollab()">
+        <button onclick="sendCollab()">Invite</button>
+      </div>
+      <div class="rail-note" style="margin-top:9px">Both of you must be live. They confirm on their end and you each get +20 — once per pair per day.</div>`;
+  } else {
+    html += `<div class="rail-note">Go live on Twitch to start a collab${collabInvites.length ? " — and to confirm the invite above" : ""}.</div>`;
+  }
+  body.innerHTML = html;
+}
+async function sendCollab(){
+  const input = document.getElementById('collabInput');
+  const v = (input.value || '').trim().toLowerCase();
+  if(!v){ input.focus(); return; }
+  if(!myLive){ showBanner('warn', 'You need to be live to start a collab.'); return; }
+  if(v === me.login.toLowerCase()){ showBanner('info', "You can't collab with yourself."); return; }
+  let live = false;
+  try{ const s = await tw('/streams?user_login=' + encodeURIComponent(v)); live = !!(s.data && s.data.length); }catch(e){}
+  if(!live){ showBanner('warn', v + " isn't live right now — both of you need to be live to collab."); return; }
+  try{
+    const { error } = await sb.rpc('collab_invite', { p_invitee_login: v });
+    if(error){
+      const m = (error.message || '').toLowerCase();
+      if(m.includes('not a member')){ showBanner('info', v + " isn't a Lineup member yet — they need to sign in here first."); return; }
+      if(m.includes('already collabed')){ showBanner('info', "You've already collabed with them today."); return; }
+      if(m.includes('yourself')){ showBanner('info', "You can't collab with yourself."); return; }
+      throw error;
+    }
+    input.value = '';
+    showBanner('ok', 'Collab invite sent to ' + v + '. Once they confirm, you both get +20.');
+  }catch(e){ showBanner('warn', "Couldn't send that invite — try again."); }
+}
+async function confirmCollab(id, inviterLogin){
+  if(!myLive){ showBanner('warn', 'You need to be live to confirm a collab.'); return; }
+  let live = false;
+  try{ const s = await tw('/streams?user_login=' + encodeURIComponent(inviterLogin)); live = !!(s.data && s.data.length); }catch(e){}
+  if(!live){ showBanner('warn', inviterLogin + " isn't live anymore — a collab needs you both live."); return; }
+  try{
+    const { data, error } = await sb.rpc('collab_confirm', { p_collab_id: id });
+    if(error){
+      if((error.message || '').toLowerCase().includes('no pending')){ showBanner('info', 'That collab is no longer available.'); loadCollabs(); return; }
+      throw error;
+    }
+    state.points = data;
+    updatePointsDisplay();
+    renderLeaderboard();
+    toast(`Collab with <b>${inviterLogin}</b> confirmed`, '+20');
+    loadCollabs();
+  }catch(e){ showBanner('warn', "Couldn't confirm — try again."); }
 }
 
 // pull my points total + recent supports/feedback (for cooldown state) from the database
@@ -694,6 +789,7 @@ async function refreshActive(manual){
   try{
     if(dataMode === 'follows'){ await loadFollowedLive(); render(); if(manual) toast('Live list updated', '↻'); }
     else if(dataMode === 'browse' && browseGameId && manual){ await fetchCategory(browseGameId, browseLabel, true); toast('Live list updated', '↻'); }
+    try{ await checkMine(); await loadCollabs(); }catch(e){}
   }catch(e){
     if(e.message === 'expired') showBanner('warn', 'Your Twitch session expired — hit Connect Twitch.');
   }finally{
@@ -754,6 +850,8 @@ async function disconnectTwitch(){
   token = null; me = null; liveData = null; browseData = null; browseGameId = null; dataMode = 'follows';
   booted = false; clearToken();
   state.points = 0; state.supported = {}; state.feedback = {}; state.discovered = {}; armedDiscovery = {}; alreadyFollow = {};
+  myLive = false; collabInvites = [];
+  document.getElementById('collabPanel').style.display = 'none';
   updatePointsDisplay();
   document.getElementById('browseBar').style.display = 'none';
   document.querySelector('.you-name').textContent = 'you';
@@ -840,6 +938,8 @@ let armedDiscovery = {};   // handle -> true once they've opened the channel and
 let alreadyFollow = {};    // login -> true for channels the user already follows (no discovery shown)
 let browseGameId = null;   // last browsed category, so we can auto-refresh it
 let autoTimer = null;      // live auto-refresh timer
+let myLive = false;        // am I currently live on Twitch?
+let collabInvites = [];    // pending collab invites addressed to me
 
 // ---- points integrity (prototype-level; true verification needs the backend) ----
 const DWELL_MS = 11 * 60000;        // must keep the page open ~11 min (1 for ads + ~10 before a view registers)
