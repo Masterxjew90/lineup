@@ -195,6 +195,14 @@
   .support.pending:hover{background:rgba(245,166,35,.12); color:#F0B45A}
   .card-actions{margin-top:auto; display:flex; gap:8px}
   .self-tag{margin-top:auto; display:flex; align-items:center; justify-content:center; gap:7px; background:var(--surface-2); border:1px solid var(--border-2); border-radius:10px; padding:9px; font-size:12.5px; font-weight:600; color:var(--good)}
+  .card.is-featured{border-color:rgba(255,92,57,.5); box-shadow:0 0 0 1px rgba(255,92,57,.22)}
+  .tag.feat{background:rgba(255,92,57,.16); color:var(--accent); font-weight:700}
+  .boost-active{display:flex; align-items:center; gap:8px; font-size:13.5px; color:var(--accent); font-weight:600; margin-bottom:11px}
+  .boost-active b{font-family:'JetBrains Mono',monospace}
+  .boost-dot{width:8px; height:8px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 0 rgba(255,92,57,.55); animation:pulse 2s infinite}
+  .boost-btn{width:100%; background:var(--accent); color:#fff; font-weight:700; font-size:13.5px; padding:11px; border-radius:11px; transition:filter .12s}
+  .boost-btn:hover{filter:brightness(1.07)}
+  .boost-btn:disabled{opacity:.45; cursor:default; filter:none}
   .card-actions .support{margin-top:0; flex:1; width:auto}
   .card-sub{display:flex; gap:8px; margin-top:8px}
   .subbtn{flex:1; display:flex; align-items:center; justify-content:center; gap:6px; background:var(--surface-2); border:1px solid var(--border-2); border-radius:10px; padding:8px; font-size:12.5px; font-weight:600; color:var(--dim); transition:all .12s}
@@ -464,6 +472,11 @@
         </div>
       </div>
 
+      <div class="panel" id="boostPanel" style="display:none">
+        <h3>Get featured <span class="collab-amt">3 pts / hr</span></h3>
+        <div id="boostBody"></div>
+      </div>
+
       <div class="panel" id="collabPanel" style="display:none">
         <h3>Collab <span class="collab-amt">+20 each</span></h3>
         <div id="collabBody"></div>
@@ -640,6 +653,7 @@ async function afterConnect(){
 
     await checkMine();          // sets myLive + renders status + collab panel
     renderGoLive();
+    renderBoost();
     renderLeaderboard();
     await loadCollabs();
     await loadFollowedLive();
@@ -749,9 +763,10 @@ async function confirmCollab(id, inviterLogin){
 async function loadMyState(){
   try{
     const uid = (await sb.auth.getUser()).data.user.id;
-    const { data: prof } = await sb.from('profiles').select('points, listed_at').eq('id', uid).single();
+    const { data: prof } = await sb.from('profiles').select('points, listed_at, featured_until').eq('id', uid).single();
     state.points = (prof && prof.points) || 0;
     state.listed = !!(prof && prof.listed_at);
+    state.featuredUntil = (prof && prof.featured_until) ? new Date(prof.featured_until).getTime() : 0;
   }catch(e){ state.points = 0; }
   state.supported = {}; state.feedback = {};
   const since = new Date(Date.now() - COOLDOWN_MS).toISOString();
@@ -867,8 +882,10 @@ async function disconnectTwitch(){
   token = null; me = null; liveData = null; browseData = null; browseGameId = null; dataMode = 'follows';
   booted = false; clearToken();
   state.points = 0; state.supported = {}; state.feedback = {}; state.discovered = {}; armedDiscovery = {}; alreadyFollow = {};
-  myLive = false; collabInvites = []; state.listed = false; lineupLive = []; lineupOffline = [];
+  myLive = false; collabInvites = []; state.listed = false; lineupLive = []; lineupOffline = []; state.featuredUntil = 0;
+  if(boostTimer){ clearInterval(boostTimer); boostTimer = null; }
   document.getElementById('collabPanel').style.display = 'none';
+  document.getElementById('boostPanel').style.display = 'none';
   document.getElementById('offlineList').style.display = 'none';
   renderGoLive();
   updatePointsDisplay();
@@ -959,7 +976,7 @@ function thumbBg(s){
 function avaBg(s){const h=hue(s.handle+'x'); return `linear-gradient(135deg, hsl(${h} 55% 55%), hsl(${(h+50)%360} 60% 42%))`;}
 
 // state
-let state = {platform:'all', cat:'all', sort:'small', q:'', supported:{}, feedback:{}, discovered:{}, points:0, listed:false};
+let state = {platform:'all', cat:'all', sort:'small', q:'', supported:{}, feedback:{}, discovered:{}, points:0, listed:false, featuredUntil:0};
 const fmt = n => n>=1000 ? (n/1000).toFixed(1)+'k' : n;
 let armedDiscovery = {};   // handle -> true once they've opened the channel and can claim
 let alreadyFollow = {};    // login -> true for channels the user already follows (no discovery shown)
@@ -967,6 +984,7 @@ let browseGameId = null;   // last browsed category, so we can auto-refresh it
 let autoTimer = null;      // live auto-refresh timer
 let myLive = false;        // am I currently live on Twitch?
 let collabInvites = [];    // pending collab invites addressed to me
+let boostTimer = null;     // ticks the featured countdown
 
 // ---- points integrity (prototype-level; true verification needs the backend) ----
 const DWELL_MS = 11 * 60000;        // must keep the page open ~11 min (1 for ads + ~10 before a view registers)
@@ -1060,6 +1078,7 @@ function render(){
   if(state.sort==='small') list.sort((a,b)=>a.viewers-b.viewers);
   else if(state.sort==='big') list.sort((a,b)=>b.viewers-a.viewers);
   else list.sort((a,b)=>a.handle.localeCompare(b.handle));
+  if(dataMode==='lineup') list.sort((a,b)=>{ if(!!a.featured !== !!b.featured) return a.featured ? -1 : 1; return 0; });
 
   document.getElementById('resultCount').textContent = list.length;
   const grid = document.getElementById('grid');
@@ -1082,10 +1101,11 @@ function render(){
     const fbDone = feedbackState(s.handle) === 'done';
     const ds = discoveryState(s.handle);
     const isSelf = me && s.handle && s.handle.toLowerCase() === me.login.toLowerCase();
+    const featured = dataMode==='lineup' && s.featured;
     const thumbStyle = s.thumb ? `background-image:url('${s.thumb}'); background-size:cover; background-position:center` : `background:${thumbBg(s)}`;
     const avaStyle = s.avatar ? `background-image:url('${s.avatar}'); background-size:cover` : `background:${avaBg(s)}`;
     const display = s.name || s.handle;
-    const tagHtml = [...(s.tags||[]), s.lang].filter(Boolean).map(t=>`<span class="tag">${t}</span>`).join('');
+    const tagHtml = (featured ? '<span class="tag feat">★ Featured</span>' : '') + [...(s.tags||[]), s.lang].filter(Boolean).map(t=>`<span class="tag">${t}</span>`).join('');
     let btnCls = 'support', dis = '', label;
     if(ss === 'cooldown'){
       btnCls += ' done'; dis = 'disabled';
@@ -1114,7 +1134,7 @@ function render(){
     const discBtn = showDiscover
       ? `<button id="disc-${s.handle}" class="${dCls}" onclick="discover('${s.handle}')" ${dDis} title="${ds==='done'?'Discovery counted':'Follow while live to earn +8'}"><span class="disc-label">${dLabel}</span></button>`
       : '';
-    return `<article class="card">
+    return `<article class="card${featured ? ' is-featured' : ''}">
       <div class="thumb" style="${thumbStyle}">
         <span class="live-pill"><span class="ld"></span>LIVE</span>
         <span class="viewers"><span class="vd"></span>${fmt(s.viewers)}</span>
@@ -1311,6 +1331,7 @@ async function goLive(){
         : "You're on the lineup. Go live on Twitch and you'll be featured at the top.");
     }
     renderGoLive();
+    renderBoost();
     if(dataMode === 'lineup'){ await loadLineup(); render(); renderOffline(); }
   }catch(e){ showBanner('warn', "Couldn't update your lineup status — try again."); }
 }
@@ -1323,12 +1344,69 @@ function renderGoLive(){
   btn.classList.toggle('listed', !!state.listed);
 }
 
+// ---- spend points to feature your live stream at the top (3 pts = 1 hour) ----
+async function featureMe(hours){
+  if(!me) return;
+  try{
+    const { data, error } = await sb.rpc('feature_me', { p_hours: hours });
+    if(error){
+      const m = (error.message || '').toLowerCase();
+      if(m.includes('not enough')){ showBanner('info', 'Not enough points yet — support and discover a few creators to earn more.'); return; }
+      if(m.includes('bad duration')) return;
+      throw error;
+    }
+    state.points = data.points;
+    state.featuredUntil = new Date(data.featured_until).getTime();
+    state.listed = true;
+    updatePointsDisplay(); renderGoLive(); renderBoost();
+    showBanner('ok', "You're featured at the top of the lineup — nice.");
+    if(dataMode === 'lineup'){ await loadLineup(); render(); renderOffline(); }
+  }catch(e){ showBanner('warn', "Couldn't feature you — try again."); }
+}
+function fmtClock(ms){
+  const s = Math.max(0, Math.floor(ms/1000));
+  const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), ss = s%60;
+  return (h ? h + ':' + String(m).padStart(2,'0') : m) + ':' + String(ss).padStart(2,'0');
+}
+function renderBoost(){
+  const panel = document.getElementById('boostPanel');
+  const body = document.getElementById('boostBody');
+  if(!me){ panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  const now = Date.now();
+  const active = state.featuredUntil && state.featuredUntil > now;
+  const afford = state.points >= 3;
+  let html = '';
+  if(active){
+    html += `<div class="boost-active"><span class="boost-dot"></span>Featured · <b id="boostCountdown">${fmtClock(state.featuredUntil - now)}</b> left</div>`;
+    html += `<button class="boost-btn" ${afford?'':'disabled'} onclick="featureMe(1)">Extend +1 hr · 3 pts</button>`;
+  } else if(state.listed){
+    html += `<div class="rail-note" style="margin-bottom:10px">Spend points to boost your live stream to the top of the Lineup. Being listed stays free.</div>`;
+    html += `<button class="boost-btn" ${afford?'':'disabled'} onclick="featureMe(1)">Feature me · 1 hr (3 pts)</button>`;
+  } else {
+    html += `<div class="rail-note">Tap <b>Go live</b> up top to join the lineup — then boost to the top from here.</div>`;
+  }
+  if(!afford && (active || state.listed)) html += `<div class="rail-note" style="margin-top:8px">You're short on points — earn by supporting and discovering others.</div>`;
+  body.innerHTML = html;
+  startBoostTimer();
+}
+function startBoostTimer(){
+  if(boostTimer){ clearInterval(boostTimer); boostTimer = null; }
+  if(!(state.featuredUntil && state.featuredUntil > Date.now())) return;
+  boostTimer = setInterval(()=>{
+    const rem = state.featuredUntil - Date.now();
+    if(rem <= 0){ clearInterval(boostTimer); boostTimer = null; state.featuredUntil = 0; renderBoost(); if(dataMode === 'lineup'){ loadLineup().then(()=>{ render(); renderOffline(); }); } return; }
+    const el = document.getElementById('boostCountdown');
+    if(el) el.textContent = fmtClock(rem);
+  }, 1000);
+}
+
 // ---- Lineup tab: members who listed themselves; live ones featured ----
 async function loadLineup(){
   let members = [];
   try{
     const { data } = await sb.from('profiles')
-      .select('twitch_login, display_name, avatar, points, listed_at')
+      .select('twitch_login, display_name, avatar, points, listed_at, featured_until')
       .not('listed_at', 'is', null)
       .order('points', { ascending:false })
       .limit(100);
@@ -1343,8 +1421,18 @@ async function loadLineup(){
     liveStreams = res.data || [];
   }catch(e){}
   const liveByLogin = {}; liveStreams.forEach(s => { liveByLogin[s.user_login.toLowerCase()] = true; });
+  const memByLogin = {}; members.forEach(m => { memByLogin[m.twitch_login.toLowerCase()] = m; });
   const avatars = await fetchAvatars(liveStreams);
-  lineupLive = liveStreams.map(s => mapStream(s, avatars));
+  const now = Date.now();
+  lineupLive = liveStreams.map(s => {
+    const c = mapStream(s, avatars);
+    const mem = memByLogin[s.user_login.toLowerCase()];
+    const fu = (mem && mem.featured_until) ? new Date(mem.featured_until).getTime() : 0;
+    c.featured = fu > now;
+    c.featuredUntil = fu;
+    return c;
+  });
+  lineupLive.sort((a,b)=>{ if(a.featured !== b.featured) return a.featured ? -1 : 1; return a.viewers - b.viewers; });
   lineupOffline = members.filter(m => !liveByLogin[m.twitch_login.toLowerCase()]);
 }
 function renderOffline(){
