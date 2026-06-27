@@ -373,6 +373,11 @@
   .pf-form input[type=color]{height:46px; padding:5px; cursor:pointer}
   .pf-form-row{display:grid; grid-template-columns:1fr 1fr; gap:12px}
   .pf-save{margin-top:22px; display:flex; gap:10px}
+  .pf-danger{margin-top:26px; padding:16px; border:1px solid rgba(255,92,92,.3); border-radius:13px; background:rgba(255,92,92,.05)}
+  .pf-danger-t{font-weight:700; font-size:13px; color:#FF6B6B; margin-bottom:6px}
+  .pf-danger-p{font-size:12.5px; color:var(--dim); line-height:1.5; margin-bottom:12px}
+  .pf-delete-btn{background:rgba(255,92,92,.12); border:1px solid rgba(255,92,92,.45); color:#FF6B6B; font-weight:700; font-size:13px; padding:9px 16px; border-radius:10px}
+  .pf-delete-btn:hover{background:rgba(255,92,92,.22)}
   .pf-save button{flex:1; padding:12px; border-radius:12px; font-weight:700; font-size:14px}
   .pf-save .save{background:var(--paccent); color:#fff} .pf-save .save:hover{filter:brightness(1.07)}
   .pf-save .cancel{background:var(--surface-2); border:1px solid var(--border); color:var(--text)}
@@ -2154,6 +2159,18 @@ async function blockPoster(login){
     toast(login + ' blocked from your wall', '⛔');
   }catch(e){ toast("Couldn't block — try again", '✕'); }
 }
+async function deleteAccount(){
+  if(!confirm('Delete your Lineup account? This removes your profile, points, posts, and everything else. This cannot be undone.')) return;
+  if(!confirm('Are you absolutely sure? This is permanent.')) return;
+  try{
+    const { error } = await sb.rpc('delete_my_account');
+    if(error) throw error;
+    try{ await sb.auth.signOut(); }catch(e){}
+    try{ localStorage.clear(); }catch(e){}
+    toast('Your account has been deleted', '✓');
+    setTimeout(()=>{ location.href = location.pathname; }, 900);
+  }catch(e){ toast("Couldn't delete — try again", '✕'); }
+}
 async function deletePost(id){
   try{
     const { error } = await sb.from('posts').delete().eq('id', id);
@@ -2227,6 +2244,11 @@ function renderProfile(){
       <div class="pf-save">
         <button class="cancel" onclick="editingProfile=false; editLayout=null; renderProfile();">Cancel</button>
         <button class="save" onclick="saveProfilePage()">Save page</button>
+      </div>
+      <div class="pf-danger">
+        <div class="pf-danger-t">Danger zone</div>
+        <p class="pf-danger-p">Deleting your account removes your profile, points, posts, and everything else from Lineup. This can't be undone. (Your Twitch/Facebook logins themselves aren't affected — you just won't have a Lineup account anymore.)</p>
+        <button class="pf-delete-btn" onclick="deleteAccount()">Delete my account</button>
       </div>
     </div>`;
     return;
