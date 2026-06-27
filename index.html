@@ -288,6 +288,45 @@
 
   footer{max-width:1280px; margin:36px auto 0; padding:24px 26px; border-top:1px solid var(--border); color:var(--faint); font-size:12.5px; line-height:1.6}
 
+  /* ---------- Profile page ---------- */
+  #profile{display:none; position:fixed; inset:0; z-index:140; background:radial-gradient(120% 70% at 50% -10%, color-mix(in srgb, var(--paccent, #FF5C39) 16%, var(--bg)) 0%, var(--bg) 60%); overflow-y:auto; --paccent:#FF5C39}
+  .pf-inner{max-width:680px; margin:0 auto; padding:0 22px 70px}
+  .pf-nav{display:flex; align-items:center; justify-content:space-between; padding:18px 0}
+  .pf-back, .pf-copy{display:inline-flex; align-items:center; gap:7px; background:var(--surface-2); border:1px solid var(--border); color:var(--text); font-weight:600; font-size:13px; padding:8px 14px; border-radius:10px}
+  .pf-back:hover, .pf-copy:hover{border-color:var(--border-2)}
+  .pf-card{background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:30px 26px; text-align:center; position:relative; overflow:hidden}
+  .pf-card::before{content:''; position:absolute; inset:0 0 auto 0; height:84px; background:linear-gradient(135deg, var(--paccent), color-mix(in srgb, var(--paccent) 55%, #FF3B7C)); opacity:.9}
+  .pf-ava{width:104px; height:104px; border-radius:50%; margin:18px auto 0; background-size:cover; background-position:center; border:4px solid var(--surface); position:relative; box-shadow:0 6px 20px rgba(0,0,0,.35)}
+  .pf-name{font-family:'Bricolage Grotesque',sans-serif; font-weight:800; font-size:26px; letter-spacing:-.02em; margin-top:14px}
+  .pf-login{color:var(--dim); font-size:14px; margin-top:2px}
+  .pf-stats{display:inline-flex; gap:22px; margin-top:16px; padding:11px 20px; background:var(--surface-2); border:1px solid var(--border); border-radius:13px}
+  .pf-stat b{font-family:'JetBrains Mono',monospace; font-size:18px; color:var(--paccent)} .pf-stat span{display:block; font-size:11px; color:var(--faint); text-transform:uppercase; letter-spacing:.05em; margin-top:2px}
+  .pf-bio{margin-top:18px; color:var(--text); font-size:15px; line-height:1.6; white-space:pre-wrap; text-align:left}
+  .pf-section-t{font-size:11.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--faint); font-weight:700; margin:26px 0 12px}
+  .pf-links{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+  .pf-link{display:flex; align-items:center; gap:10px; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px 14px; font-weight:600; font-size:14px; color:var(--text); transition:border-color .12s, transform .12s}
+  .pf-link:hover{border-color:var(--paccent); transform:translateY(-1px)}
+  .pf-link .pf-lk-dot{width:9px; height:9px; border-radius:50%; flex-shrink:0}
+  .pf-embed{width:100%; height:152px; border-radius:13px; border:1px solid var(--border); margin-top:4px; background:var(--surface)}
+  .pf-embed-sp{height:152px} .pf-embed-sc{height:120px}
+  .pf-edit-btn{display:inline-flex; align-items:center; gap:7px; margin-top:20px; background:var(--paccent); color:#fff; font-weight:700; font-size:14px; padding:11px 20px; border-radius:12px}
+  .pf-edit-btn:hover{filter:brightness(1.07)}
+  .pf-form label{display:block; font-size:12.5px; font-weight:600; color:var(--dim); margin:16px 0 6px}
+  .pf-form input, .pf-form textarea{width:100%; background:var(--bg); border:1px solid var(--border); border-radius:11px; padding:11px 12px; color:var(--text); font-family:inherit; font-size:14px; outline:none}
+  .pf-form input:focus, .pf-form textarea:focus{border-color:var(--paccent)}
+  .pf-form textarea{min-height:90px; resize:vertical; line-height:1.5}
+  .pf-form input[type=color]{height:46px; padding:5px; cursor:pointer}
+  .pf-form-row{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+  .pf-save{margin-top:22px; display:flex; gap:10px}
+  .pf-save button{flex:1; padding:12px; border-radius:12px; font-weight:700; font-size:14px}
+  .pf-save .save{background:var(--paccent); color:#fff} .pf-save .save:hover{filter:brightness(1.07)}
+  .pf-save .cancel{background:var(--surface-2); border:1px solid var(--border); color:var(--text)}
+  .pf-empty{text-align:center; padding:70px 20px; color:var(--dim)}
+  .pf-empty b{display:block; font-family:'Bricolage Grotesque',sans-serif; font-size:22px; color:var(--text); margin-bottom:8px}
+  .mypage-btn{width:100%; margin-top:13px; background:var(--surface-2); border:1px solid var(--border); color:var(--text); font-weight:600; font-size:13px; padding:10px; border-radius:10px; transition:border-color .12s}
+  .mypage-btn:hover{border-color:var(--accent); color:var(--accent)}
+  @media(max-width:560px){ .pf-links, .pf-form-row{grid-template-columns:1fr} }
+
   /* ---------- Landing ---------- */
   #landing{position:fixed; inset:0; z-index:120; background:radial-gradient(120% 80% at 50% -10%, #1B1320 0%, var(--bg) 55%); overflow-y:auto}
   .lp-inner{max-width:1060px; margin:0 auto; padding:0 26px 64px}
@@ -398,6 +437,16 @@
   </div>
 </div>
 
+<div id="profile">
+  <div class="pf-inner">
+    <div class="pf-nav">
+      <button class="pf-back" onclick="closeProfile()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg> Lineup</button>
+      <button class="pf-copy" onclick="copyProfileLink()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg> Copy link</button>
+    </div>
+    <div id="pfContent"></div>
+  </div>
+</div>
+
 <div class="topbar">
   <div class="brand">
     <span class="brand-dot"></span>
@@ -479,6 +528,7 @@
             <div class="you-sub">points</div>
           </div>
         </div>
+        <button class="mypage-btn" id="myPageBtn" style="display:none" onclick="if(me)openProfile(me.login)">View &amp; edit my page →</button>
       </div>
 
       <div class="panel" id="boostPanel" style="display:none">
@@ -489,6 +539,11 @@
       <div class="panel" id="collabPanel" style="display:none">
         <h3>Collab <span class="collab-amt">+20 each</span></h3>
         <div id="collabBody"></div>
+      </div>
+
+      <div class="panel" id="raidPanel" style="display:none">
+        <h3>Raid / host <span class="collab-amt">+25 / +10</span></h3>
+        <div id="raidBody"></div>
       </div>
 
       <div class="panel">
@@ -502,7 +557,7 @@
           <li><span class="k">+10</span><span>Watch a stream for real (~11 min counts)</span></li>
           <li><span class="k">+8</span><span>Discover a new creator (follow while they're live)</span></li>
           <li><span class="k">+5</span><span>Leave useful feedback on a VOD</span></li>
-          <li><span class="k">+25</span><span>Raid or host another member <em class="soon">soon</em></span></li>
+          <li><span class="k">+25</span><span>Raid or host another member (they get +10)</span></li>
           <li><span class="k">+20</span><span>Collab with another live member</span></li>
         </ul>
         <div class="rail-note" style="margin-top:10px">Points reward genuine discovery and showing up — never buying follows. That's what keeps the whole thing safe under Twitch's rules.</div>
@@ -678,12 +733,15 @@ async function afterConnect(){
     renderBoost();
     renderLeaderboard();
     await loadCollabs();
+    await loadRaids();
     await loadFollowedLive();
     dataMode = 'follows'; state.platform = 'all';
     resumeWatches();
     buildSrcToggle(); buildChips(); render();
     startAutoRefresh();
     renderMatureNote();
+    document.getElementById('myPageBtn').style.display = 'block';
+    if(viewingProfile && document.getElementById('profile').style.display === 'block') renderProfile();
     if(state.isAdult === null) showAgeGate();
     showBanner('ok', myLive
       ? "You're live right now — and below are the channels you follow that are live too."
@@ -801,6 +859,71 @@ async function confirmCollab(id, inviterLogin){
   }catch(e){ showBanner('warn', "Couldn't confirm — try again."); }
 }
 
+// ---- Raid / host (raider +25, raided +10) — raider needn't still be live ----
+async function loadRaids(){
+  raidInvites = [];
+  if(!me) return;
+  try{
+    const { data } = await sb.from('raids')
+      .select('id, raider_login')
+      .eq('status', 'pending')
+      .eq('raided_login', me.login.toLowerCase());
+    raidInvites = data || [];
+  }catch(e){}
+  renderRaid();
+}
+function renderRaid(){
+  const panel = document.getElementById('raidPanel');
+  const body = document.getElementById('raidBody');
+  if(!me){ panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  let html = '';
+  raidInvites.forEach(r=>{
+    html += `<div class="collab-invite"><span class="ci-name">${r.raider_login}</span> raided you<button class="ci-confirm" onclick="confirmRaid(${r.id}, '${r.raider_login}')">Confirm</button></div>`;
+  });
+  html += `<div class="collab-form">
+      <input id="raidInput" placeholder="Who you raided (username)" onkeydown="if(event.key==='Enter')claimRaid()">
+      <button onclick="claimRaid()">Claim</button>
+    </div>
+    <div class="rail-note" style="margin-top:9px">Raid a live member, then claim it here. When they confirm it landed, you get +25 and they get +10 — once per pair per day.</div>`;
+  body.innerHTML = html;
+}
+async function claimRaid(){
+  const input = document.getElementById('raidInput');
+  const v = (input.value || '').trim().toLowerCase();
+  if(!v){ input.focus(); return; }
+  if(v === me.login.toLowerCase()){ showBanner('info', "You can't raid yourself."); return; }
+  let live = false;
+  try{ const s = await tw('/streams?user_login=' + encodeURIComponent(v)); live = !!(s.data && s.data.length); }catch(e){}
+  if(!live){ showBanner('warn', v + " isn't live right now — raid a member while they're live, then claim it."); return; }
+  try{
+    const { error } = await sb.rpc('raid_claim', { p_raided_login: v });
+    if(error){
+      const m = (error.message || '').toLowerCase();
+      if(m.includes('not a member')){ showBanner('info', v + " isn't a Lineup member yet — they need to sign in here first."); return; }
+      if(m.includes('already raided')){ showBanner('info', "You've already raided them today."); return; }
+      if(m.includes('yourself')){ showBanner('info', "You can't raid yourself."); return; }
+      throw error;
+    }
+    input.value = '';
+    showBanner('ok', 'Raid claim sent to ' + v + '. Once they confirm, you get +25 and they get +10.');
+  }catch(e){ showBanner('warn', "Couldn't send that raid claim — try again."); }
+}
+async function confirmRaid(id, raiderLogin){
+  try{
+    const { data, error } = await sb.rpc('raid_confirm', { p_raid_id: id });
+    if(error){
+      if((error.message || '').toLowerCase().includes('no pending')){ showBanner('info', 'That raid is no longer available.'); loadRaids(); return; }
+      throw error;
+    }
+    state.points = data;
+    updatePointsDisplay();
+    renderLeaderboard();
+    toast(`Raid from <b>${raiderLogin}</b> confirmed`, '+10');
+    loadRaids();
+  }catch(e){ showBanner('warn', "Couldn't confirm — try again."); }
+}
+
 // pull my points total + recent supports/feedback (for cooldown state) from the database
 async function loadMyState(){
   try{
@@ -888,7 +1011,7 @@ async function refreshActive(manual){
     if(dataMode === 'follows'){ await loadFollowedLive(); render(); if(manual) toast('Live list updated', '↻'); }
     else if(dataMode === 'browse' && browseGameId && manual){ await fetchCategory(browseGameId, browseLabel, true); toast('Live list updated', '↻'); }
     else if(dataMode === 'lineup'){ await loadLineup(); render(); renderOffline(); if(manual) toast('Lineup updated', '↻'); }
-    try{ await checkMine(); await loadCollabs(); }catch(e){}
+    try{ await checkMine(); await loadCollabs(); await loadRaids(); }catch(e){}
   }catch(e){
     if(e.message === 'expired') showBanner('warn', 'Your Twitch session expired — hit Connect Twitch.');
   }finally{
@@ -949,12 +1072,14 @@ async function disconnectTwitch(){
   token = null; me = null; liveData = null; browseData = null; browseGameId = null; dataMode = 'follows';
   booted = false; clearToken();
   state.points = 0; state.supported = {}; state.feedback = {}; state.discovered = {}; armedDiscovery = {}; alreadyFollow = {};
-  myLive = false; collabInvites = []; state.listed = false; lineupLive = []; lineupOffline = []; state.featRemaining = 0; state.featRunning = false; state.featSyncAt = 0; state.isAdult = null;
+  myLive = false; collabInvites = []; raidInvites = []; state.listed = false; lineupLive = []; lineupOffline = []; state.featRemaining = 0; state.featRunning = false; state.featSyncAt = 0; state.isAdult = null;
   if(boostTimer){ clearInterval(boostTimer); boostTimer = null; }
   document.getElementById('collabPanel').style.display = 'none';
+  document.getElementById('raidPanel').style.display = 'none';
   document.getElementById('boostPanel').style.display = 'none';
   document.getElementById('offlineList').style.display = 'none';
   document.getElementById('ageModal').style.display = 'none';
+  document.getElementById('myPageBtn').style.display = 'none';
   renderGoLive(); renderMatureNote();
   updatePointsDisplay();
   document.getElementById('browseBar').style.display = 'none';
@@ -1061,6 +1186,7 @@ let browseGameId = null;   // last browsed category, so we can auto-refresh it
 let autoTimer = null;      // live auto-refresh timer
 let myLive = false;        // am I currently live on Twitch?
 let collabInvites = [];    // pending collab invites addressed to me
+let raidInvites = [];      // pending raid claims addressed to me
 let boostTimer = null;     // ticks the featured countdown
 
 // ---- points integrity (prototype-level; true verification needs the backend) ----
@@ -1548,6 +1674,132 @@ function toast(html, pts){
 }
 
 // ---- leaderboard: real shared ranking, read live from the database ----
+// ---- Creator profile pages ----
+let viewingProfile = null;   // login currently being viewed
+let currentProfile = undefined;  // undefined=loading, null=not found, object=loaded
+let editingProfile = false;
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function safeUrl(u){ u = (u||'').trim(); return /^https?:\/\//i.test(u) ? u : null; }
+const LINK_DEFS = [
+  {key:'youtube', label:'YouTube', color:'#FF0000'},
+  {key:'kick', label:'Kick', color:'#53FC18'},
+  {key:'tiktok', label:'TikTok', color:'#25F4EE'},
+  {key:'twitter', label:'X / Twitter', color:'#1DA1F2'},
+  {key:'instagram', label:'Instagram', color:'#E1306C'},
+  {key:'discord', label:'Discord', color:'#5865F2'},
+  {key:'website', label:'Website', color:'#A56BFF'}
+];
+function musicEmbed(url){
+  const u = (url || '').trim(); if(!u) return '';
+  let m = u.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|live\/)|youtu\.be\/)([\w-]{11})/);
+  if(m) return `<iframe class="pf-embed" src="https://www.youtube.com/embed/${m[1]}" allow="encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+  m = u.match(/open\.spotify\.com\/(track|album|playlist|artist|episode|show)\/([A-Za-z0-9]+)/);
+  if(m) return `<iframe class="pf-embed pf-embed-sp" src="https://open.spotify.com/embed/${m[1]}/${m[2]}" allow="encrypted-media"></iframe>`;
+  if(/soundcloud\.com\//.test(u)) return `<iframe class="pf-embed pf-embed-sc" src="https://w.soundcloud.com/player/?url=${encodeURIComponent(u)}" allow="encrypted-media"></iframe>`;
+  return '';
+}
+async function showProfile(login, push){
+  login = (login || '').toLowerCase(); if(!login) return;
+  viewingProfile = login; editingProfile = false; currentProfile = undefined;
+  if(push) history.pushState({}, '', '?u=' + encodeURIComponent(login));
+  document.getElementById('profile').style.display = 'block';
+  window.scrollTo(0,0);
+  renderProfile();
+  await loadProfile(login);
+}
+function openProfile(login){ showProfile(login, true); }
+async function loadProfile(login){
+  try{
+    const { data } = await sb.from('profiles')
+      .select('twitch_login, display_name, avatar, points, bio, accent, links, music_url')
+      .ilike('twitch_login', login).limit(1);
+    currentProfile = (data && data[0]) ? data[0] : null;
+  }catch(e){ currentProfile = null; }
+  renderProfile();
+}
+function closeProfile(){
+  viewingProfile = null; editingProfile = false;
+  history.pushState({}, '', location.pathname);
+  document.getElementById('profile').style.display = 'none';
+}
+function copyProfileLink(){
+  if(!viewingProfile) return;
+  const url = location.origin + location.pathname + '?u=' + encodeURIComponent(viewingProfile);
+  if(navigator.clipboard){ navigator.clipboard.writeText(url).then(()=>toast('Profile link copied','🔗')).catch(()=>{}); }
+}
+function renderProfile(){
+  const c = document.getElementById('pfContent');
+  const p = currentProfile;
+  if(p === undefined){ c.innerHTML = `<div class="pf-empty">Loading…</div>`; return; }
+  if(p === null){ c.innerHTML = `<div class="pf-empty"><b>No page here yet</b>That member hasn't set up a Lineup page.</div>`; return; }
+  const accent = (p.accent && /^#[0-9A-Fa-f]{6}$/.test(p.accent)) ? p.accent : '#FF5C39';
+  document.getElementById('profile').style.setProperty('--paccent', accent);
+  const owner = me && me.login && me.login.toLowerCase() === p.twitch_login.toLowerCase();
+  const name = esc(p.display_name || p.twitch_login);
+  const avaBg = p.avatar ? `background-image:url('${esc(p.avatar)}')` : `background:linear-gradient(135deg, ${accent}, #FF3B7C)`;
+  const links = (p.links && typeof p.links === 'object') ? p.links : {};
+
+  if(owner && editingProfile){
+    c.innerHTML = `<div class="pf-card" style="padding-bottom:26px">
+      <div class="pf-ava" style="${avaBg}"></div>
+      <div class="pf-name">${name}</div>
+      <div class="pf-login">@${esc(p.twitch_login)}</div>
+    </div>
+    <div class="pf-form">
+      <label>About you (max 600 chars)</label>
+      <textarea id="pfBio" maxlength="600" placeholder="Tell people who you are, what you stream, your schedule…">${esc(p.bio || '')}</textarea>
+      <div class="pf-form-row">
+        <div><label>Accent color</label><input type="color" id="pfAccent" value="${accent}"></div>
+        <div><label>Profile music (YouTube / Spotify / SoundCloud link)</label><input id="pfMusic" value="${esc(p.music_url || '')}" placeholder="https://…"></div>
+      </div>
+      <div class="pf-section-t" style="margin-bottom:0">Your links</div>
+      ${LINK_DEFS.map(d=>`<label>${d.label}</label><input id="pf-${d.key}" value="${esc(links[d.key] || '')}" placeholder="https://…">`).join('')}
+      <div class="pf-save">
+        <button class="cancel" onclick="editingProfile=false; renderProfile();">Cancel</button>
+        <button class="save" onclick="saveProfilePage()">Save page</button>
+      </div>
+    </div>`;
+    return;
+  }
+
+  const twitchLink = `<a class="pf-link" href="https://twitch.tv/${esc(p.twitch_login)}" target="_blank" rel="noopener"><span class="pf-lk-dot" style="background:#A56BFF"></span>Twitch</a>`;
+  const linkBtns = LINK_DEFS.map(d=>{
+    const u = safeUrl(links[d.key]); if(!u) return '';
+    return `<a class="pf-link" href="${esc(u)}" target="_blank" rel="noopener"><span class="pf-lk-dot" style="background:${d.color}"></span>${d.label}</a>`;
+  }).join('');
+  const music = musicEmbed(p.music_url);
+  c.innerHTML = `<div class="pf-card">
+      <div class="pf-ava" style="${avaBg}"></div>
+      <div class="pf-name">${name}</div>
+      <div class="pf-login">@${esc(p.twitch_login)}</div>
+      <div class="pf-stats"><div class="pf-stat"><b>${p.points||0}</b><span>points</span></div></div>
+      ${p.bio ? `<div class="pf-bio">${esc(p.bio)}</div>` : ''}
+      ${owner ? `<div><button class="pf-edit-btn" onclick="editingProfile=true; renderProfile();"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg> Edit my page</button></div>` : ''}
+    </div>
+    <div class="pf-section-t">Find me on</div>
+    <div class="pf-links">${twitchLink}${linkBtns}</div>
+    ${music ? `<div class="pf-section-t">Now playing</div>${music}` : ''}`;
+}
+async function saveProfilePage(){
+  const bio = document.getElementById('pfBio').value;
+  const accent = document.getElementById('pfAccent').value;
+  const music = document.getElementById('pfMusic').value.trim();
+  const links = {};
+  LINK_DEFS.forEach(d=>{ const el = document.getElementById('pf-' + d.key); if(el && el.value.trim()) links[d.key] = el.value.trim(); });
+  try{
+    await sb.rpc('save_page', { p_bio: bio, p_accent: accent, p_links: links, p_music: music });
+    Object.assign(currentProfile, { bio, accent, links, music_url: music });
+    editingProfile = false;
+    renderProfile();
+    toast('Your page is saved', '✓');
+  }catch(e){ toast("Couldn't save — try again", '✕'); }
+}
+window.addEventListener('popstate', ()=>{
+  const u = new URLSearchParams(location.search).get('u');
+  if(u) showProfile(u, false);
+  else { viewingProfile = null; document.getElementById('profile').style.display = 'none'; }
+});
+
 async function renderLeaderboard(){
   const el = document.getElementById('leaderboard');
   let rows = [];
@@ -1571,9 +1823,9 @@ async function renderLeaderboard(){
     const name = r.display_name || r.twitch_login || 'streamer';
     const bg = r.avatar ? `background-image:url('${r.avatar}'); background-size:cover`
                         : `background:linear-gradient(135deg, hsl(${hue(name)} 55% 55%), hsl(${(hue(name)+50)%360} 60% 42%))`;
-    const ext = url ? '<span class="lb-ext"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3"/></svg></span>' : '';
-    const cls = `lb-row ${mine?'me':''} ${rank<=3?'top'+rank:''} ${url?'clickable':''}`;
-    const click = url ? `onclick="window.open('${url}','_blank','noopener')" title="Open ${name} on Twitch"` : '';
+    const ext = url ? `<span class="lb-ext" onclick="event.stopPropagation(); window.open('${url}','_blank','noopener')" title="Open on Twitch"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3"/></svg></span>` : '';
+    const cls = `lb-row ${mine?'me':''} ${rank<=3?'top'+rank:''} clickable`;
+    const click = `onclick="openProfile('${r.twitch_login}')" title="View ${name}'s page"`;
     return `<div class="${cls}" ${click}>
       <span class="lb-num">${rank}</span>
       <span class="lb-ava" style="${bg}"></span>
@@ -1610,6 +1862,10 @@ sb.auth.onAuthStateChange((event, session)=>{
     afterConnect();
   }
 });
+
+// deep link: /?u=username opens that creator's page
+const initU = new URLSearchParams(location.search).get('u');
+if(initU) showProfile(initU, false);
 
 // if nobody is logged in, prompt to connect
 setTimeout(()=>{
