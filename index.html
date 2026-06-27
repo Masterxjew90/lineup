@@ -305,7 +305,10 @@
   .pf-back, .pf-copy{display:inline-flex; align-items:center; gap:7px; background:var(--surface-2); border:1px solid var(--border); color:var(--text); font-weight:600; font-size:13px; padding:8px 14px; border-radius:10px}
   .pf-back:hover, .pf-copy:hover{border-color:var(--border-2)}
   .pf-card{background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:30px 26px; text-align:center; position:relative; overflow:hidden}
-  .pf-card::before{content:''; position:absolute; inset:0 0 auto 0; height:84px; background:linear-gradient(135deg, var(--paccent), color-mix(in srgb, var(--paccent) 55%, #FF3B7C)); opacity:.9}
+  .pf-card::before{content:''; position:absolute; inset:0 0 auto 0; height:84px; background:linear-gradient(135deg, var(--paccent), color-mix(in srgb, var(--paccent) 55%, #FF3B7C)); opacity:.9; z-index:1}
+  .pf-card-img{position:absolute; inset:0; z-index:0; background-size:cover; background-position:center}
+  .pf-card-img::after{content:''; position:absolute; inset:0; background:linear-gradient(rgba(25,27,33,.55), rgba(25,27,33,.85))}
+  .pf-card > *:not(.pf-card-img){position:relative; z-index:2}
   .pf-ava{width:104px; height:104px; border-radius:50%; margin:18px auto 0; background-size:cover; background-position:center; border:4px solid var(--surface); position:relative; box-shadow:0 6px 20px rgba(0,0,0,.35)}
   .pf-name{font-family:'Bricolage Grotesque',sans-serif; font-weight:800; font-size:26px; letter-spacing:-.02em; margin-top:14px}
   .pf-login{color:var(--dim); font-size:14px; margin-top:2px}
@@ -1729,9 +1732,19 @@ function layoutToggle(k){
   const x = editLayout.find(y => y.k === k); if(x) x.show = !x.show;
 }
 function safeBgUrl(u){ u = (u||'').trim(); if(!/^https?:\/\//i.test(u)) return null; if(/["'()\s<>]/.test(u)) return null; return u; }
+// turn a Giphy/Tenor page link into a direct image link so it actually renders
+function normalizeMediaUrl(u){
+  u = (u||'').trim(); if(!u) return '';
+  if(/giphy\.com/.test(u) && !/media\.giphy\.com\/media\//.test(u)){
+    const m = u.match(/giphy\.com\/(?:gifs|clips|embed|stickers)\/(?:[\w-]*-)?([A-Za-z0-9]{6,})/);
+    if(m) return 'https://media.giphy.com/media/' + m[1] + '/giphy.gif';
+  }
+  return u;
+}
+function resolveImg(u){ return safeBgUrl(normalizeMediaUrl(u)); }
 function applyBg(url){
   const layer = document.getElementById('pfBgLayer');
-  const bg = safeBgUrl(url);
+  const bg = resolveImg(url);
   if(bg){ layer.style.backgroundImage = `url('${bg}')`; layer.style.display = 'block'; }
   else { layer.style.backgroundImage = ''; layer.style.display = 'none'; }
 }
@@ -1791,7 +1804,7 @@ function openProfile(login){ showProfile(login, true); }
 async function loadProfile(login){
   try{
     const { data } = await sb.from('profiles')
-      .select('twitch_login, display_name, avatar, points, bio, accent, links, music_url, bg_url, layout, fb_verified, fb_name')
+      .select('twitch_login, display_name, avatar, points, bio, accent, links, music_url, bg_url, layout, fb_verified, fb_name, card_url')
       .ilike('twitch_login', login).limit(1);
     currentProfile = (data && data[0]) ? data[0] : null;
   }catch(e){ currentProfile = null; }
@@ -1904,8 +1917,10 @@ function renderProfile(){
         <div><label>Accent color</label><input type="color" id="pfAccent" value="${accent}"></div>
         <div><label>Profile music (YouTube / Spotify / SoundCloud link)</label><input id="pfMusic" value="${esc(p.music_url || '')}" placeholder="https://…"></div>
       </div>
-      <label>Background image or GIF (paste a link)</label>
+      <label>Background image or GIF (paste a link — Giphy page links work too)</label>
       <input id="pfBg" value="${esc(p.bg_url || '')}" placeholder="https://…/image.gif">
+      <label>Card image or GIF (behind your name — Giphy links work too)</label>
+      <input id="pfCard" value="${esc(p.card_url || '')}" placeholder="https://…/image.gif">
       <div class="pf-section-t" style="margin-bottom:8px">Verify your Facebook</div>
       ${p.fb_verified
         ? `<div class="pf-fb-done"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg> Verified on Facebook${p.fb_name ? ' · ' + esc(p.fb_name) : ''}</div>`
@@ -1945,6 +1960,7 @@ function renderProfile(){
   };
   const order = normLayout(p.layout).filter(x => x.show).map(x => sec[x.k]).join('');
   c.innerHTML = `<div class="pf-card">
+      ${resolveImg(p.card_url) ? `<div class="pf-card-img" style="background-image:url('${resolveImg(p.card_url)}')"></div>` : ''}
       <div class="pf-ava" style="${avaBg}"></div>
       <div class="pf-name">${name}</div>
       <div class="pf-login">@${esc(p.twitch_login)}</div>
@@ -1958,13 +1974,14 @@ async function saveProfilePage(){
   const bio = document.getElementById('pfBio').value;
   const accent = document.getElementById('pfAccent').value;
   const music = document.getElementById('pfMusic').value.trim();
-  const bg = document.getElementById('pfBg').value.trim();
+  const bg = normalizeMediaUrl(document.getElementById('pfBg').value.trim());
+  const card = normalizeMediaUrl(document.getElementById('pfCard').value.trim());
   const layout = editLayout || normLayout(currentProfile.layout);
   const links = {};
   LINK_DEFS.forEach(d=>{ const el = document.getElementById('pf-' + d.key); if(el && el.value.trim()) links[d.key] = el.value.trim(); });
   try{
-    await sb.rpc('save_page', { p_bio: bio, p_accent: accent, p_links: links, p_music: music, p_bg: bg, p_layout: layout });
-    Object.assign(currentProfile, { bio, accent, links, music_url: music, bg_url: bg, layout });
+    await sb.rpc('save_page', { p_bio: bio, p_accent: accent, p_links: links, p_music: music, p_bg: bg, p_layout: layout, p_card: card });
+    Object.assign(currentProfile, { bio, accent, links, music_url: music, bg_url: bg, layout, card_url: card });
     editingProfile = false; editLayout = null;
     renderProfile();
     toast('Your page is saved', '✓');
