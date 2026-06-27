@@ -870,10 +870,12 @@ async function tw(path){
 }
 
 let authUid = null;
+let lastUser = null;
 async function afterConnect(){
   let user = null;
   try{ const r = await sb.auth.getUser(); user = r.data && r.data.user; }catch(e){}
   if(!user){ showBanner('warn', 'Sign-in issue — please try connecting again.'); renderAuthSlot(); return; }
+  lastUser = user;
   authUid = user.id;
   const ids = user.identities || [];
   const hasTwitch = ids.some(i => i.provider === 'twitch');
@@ -938,7 +940,7 @@ function renderLiteHub(twitchLinked){
 }
 async function afterConnectTwitch(){
   try{
-    if(!token){ showBanner('warn', 'Your Twitch access expired — hit Connect Twitch to refresh it.'); renderAuthSlot(); return; }
+    if(!token){ return afterConnectLite(lastUser, true); }
     showBanner('info', 'Loading your profile and live follows…');
     const u = await tw('/users');
     me = u.data && u.data[0];
@@ -976,8 +978,8 @@ async function afterConnectTwitch(){
           ? 'Connected. These are the channels you follow that are live right now.'
           : 'Connected — none of your follows are live this second. Try the Discover tab to find someone new.'));
   }catch(e){
-    if(e.message === 'expired') showBanner('warn', 'Your Twitch session expired. Hit Connect Twitch to refresh it.');
-    else showBanner('warn', "Couldn't load your data: " + (e.message || e));
+    if(e.message === 'expired'){ return afterConnectLite(lastUser, true); }
+    showBanner('warn', "Couldn't load your data: " + (e.message || e));
     renderAuthSlot();
   }
 }
@@ -1585,7 +1587,7 @@ function render(){
     const ss = supportState(s.handle);
     const fbDone = feedbackState(s.handle) === 'done';
     const ds = discoveryState(s.handle);
-    const isSelf = me && s.handle && s.handle.toLowerCase() === me.login.toLowerCase();
+    const isSelf = me && me.login && s.handle && s.handle.toLowerCase() === me.login.toLowerCase();
     const featured = dataMode==='lineup' && s.featured;
     const thumbStyle = s.thumb ? `background-image:url('${s.thumb}'); background-size:cover; background-position:center` : `background:${thumbBg(s)}`;
     const avaStyle = s.avatar ? `background-image:url('${s.avatar}'); background-size:cover` : `background:${avaBg(s)}`;
@@ -2116,7 +2118,7 @@ function timeAgo(ms){
 function wallHtml(owner){
   const p = currentProfile;
   const gbOpen = !!(p && p.guestbook_open);
-  const myLogin = me ? me.login.toLowerCase() : null;
+  const myLogin = me ? ((me.login || me.username || '').toLowerCase() || null) : null;
   let html = `<div class="pf-section-t">Wall</div>`;
   if(owner){
     html += `<div class="gb-toggle">Guestbook posts from others <button class="gb-switch ${gbOpen?'on':'off'}" onclick="toggleGuestbook()">${gbOpen?'Open':'Closed'}</button></div>`;
