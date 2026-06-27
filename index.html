@@ -290,7 +290,8 @@
   footer{max-width:1280px; margin:36px auto 0; padding:24px 26px; border-top:1px solid var(--border); color:var(--faint); font-size:12.5px; line-height:1.6}
 
   /* ---------- Profile page ---------- */
-  #profile{display:none; position:fixed; inset:0; z-index:140; background:radial-gradient(120% 70% at 50% -10%, color-mix(in srgb, var(--paccent, #FF5C39) 16%, var(--bg)) 0%, var(--bg) 60%); overflow-y:auto; overflow-x:hidden; --paccent:#FF5C39}
+  #profile{display:none; position:fixed; inset:0; z-index:140; background:radial-gradient(120% 70% at 50% -10%, color-mix(in srgb, var(--paccent, #FF5C39) 16%, var(--bg)) 0%, var(--bg) 60%); overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; --paccent:#FF5C39}
+  html.overlay-open, body.overlay-open{overflow:hidden}
   #pfBgLayer{position:fixed; inset:0; z-index:0; background-size:cover; background-position:center; display:none; pointer-events:none}
   #pfBgLayer::after{content:''; position:absolute; inset:0; background:linear-gradient(rgba(10,11,14,.80), rgba(10,11,14,.93))}
   .pf-inner{max-width:680px; margin:0 auto; padding:0 22px 70px; position:relative; z-index:1}
@@ -1856,6 +1857,7 @@ async function showProfile(login, push){
   viewingProfile = login; editingProfile = false; currentProfile = undefined;
   if(push) history.pushState({}, '', '?u=' + encodeURIComponent(login));
   document.getElementById('profile').style.display = 'block';
+  lockScroll(true);
   window.scrollTo(0,0);
   renderProfile();
   await loadProfile(login);
@@ -1935,6 +1937,10 @@ function wallHtml(owner){
     }).join('') + '</div>';
   }
   return html;
+}
+function lockScroll(on){
+  document.documentElement.classList.toggle('overlay-open', on);
+  document.body.classList.toggle('overlay-open', on);
 }
 function refreshWall(){
   const el = document.getElementById('pfWall');
@@ -2018,6 +2024,7 @@ function closeProfile(){
   stopProfilePoll();
   history.pushState({}, '', location.pathname);
   document.getElementById('profile').style.display = 'none';
+  lockScroll(false);
   closeMusicPopup();
   applyBg('');
 }
@@ -2134,7 +2141,7 @@ async function saveProfilePage(){
 window.addEventListener('popstate', ()=>{
   const u = new URLSearchParams(location.search).get('u');
   if(u) showProfile(u, false);
-  else { viewingProfile = null; stopProfilePoll(); document.getElementById('profile').style.display = 'none'; }
+  else { viewingProfile = null; stopProfilePoll(); document.getElementById('profile').style.display = 'none'; lockScroll(false); }
 });
 
 async function renderLeaderboard(){
