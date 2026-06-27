@@ -309,6 +309,14 @@
   .pf-card-img{position:absolute; inset:0; z-index:0; background-size:cover; background-position:center}
   .pf-card-img::after{content:''; position:absolute; inset:0; background:linear-gradient(rgba(25,27,33,.55), rgba(25,27,33,.85))}
   .pf-card > *:not(.pf-card-img){position:relative; z-index:2}
+  .pf-card.has-player::before{display:none}
+  .pf-player{margin:-30px -26px 0; padding:14px 48px; background:linear-gradient(135deg, var(--paccent), color-mix(in srgb, var(--paccent) 55%, #FF3B7C)); display:flex; align-items:center; justify-content:center; z-index:2}
+  .pf-player-embed{width:100%; max-width:400px}
+  .pf-player-embed iframe, .pf-player-embed .pf-embed{width:100%; height:152px; border-radius:12px; border:none; margin:0; display:block; background:#000}
+  .pf-pl-arrow{position:absolute; top:50%; transform:translateY(-50%); width:34px; height:34px; border-radius:50%; background:rgba(0,0,0,.34); border:1px solid rgba(255,255,255,.45); color:#fff; font-size:12px; display:flex; align-items:center; justify-content:center; z-index:3}
+  .pf-pl-arrow:hover{background:rgba(0,0,0,.55)}
+  .pf-pl-arrow.left{left:8px} .pf-pl-arrow.right{right:8px}
+  .pf-pl-count{font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--dim); text-align:center; margin:8px 0 -6px; z-index:2}
   .pf-card button.pf-music-btn{position:absolute; top:14px; right:14px; z-index:3; display:inline-flex; align-items:center; gap:6px; background:rgba(0,0,0,.30); border:1px solid rgba(255,255,255,.4); color:#fff; font-weight:700; font-size:12px; padding:7px 12px; border-radius:999px; backdrop-filter:blur(4px); transition:background .12s}
   .pf-card button.pf-music-btn:hover{background:rgba(0,0,0,.5)}
   .music-modal{position:relative; max-width:420px; width:100%; padding:0; background:transparent; border:none}
@@ -1727,9 +1735,24 @@ let currentProfile = undefined;  // undefined=loading, null=not found, object=lo
 let editingProfile = false;
 let profilePosts = [];
 let editLayout = null;   // working copy of section order while editing
-const SECTION_LABELS = { bio:'About', links:'Links', music:'Music', wall:'Wall' };
+const SECTION_LABELS = { bio:'About', links:'Links', wall:'Wall' };
+let playerTracks = [];
+let playerIndex = 0;
+function profileTracks(p){
+  let t = Array.isArray(p.music_list) ? p.music_list.filter(x => musicEmbed(x)) : [];
+  if(!t.length && p.music_url && musicEmbed(p.music_url)) t = [p.music_url];
+  return t;
+}
+function playerRenderEmbed(){
+  const el = document.getElementById('pfPlayerEmbed');
+  if(el) el.innerHTML = musicEmbed(playerTracks[playerIndex]) || '';
+  const c = document.getElementById('pfPlCount');
+  if(c) c.textContent = (playerIndex + 1) + ' / ' + playerTracks.length;
+}
+function playerNext(){ if(!playerTracks.length) return; playerIndex = (playerIndex + 1) % playerTracks.length; playerRenderEmbed(); }
+function playerPrev(){ if(!playerTracks.length) return; playerIndex = (playerIndex - 1 + playerTracks.length) % playerTracks.length; playerRenderEmbed(); }
 function normLayout(saved){
-  const keys = ['bio','links','music','wall'];
+  const keys = ['bio','links','wall'];
   let arr = Array.isArray(saved) ? saved.filter(x => x && keys.includes(x.k)) : [];
   const seen = {}; arr = arr.filter(x => seen[x.k] ? false : (seen[x.k] = true));
   keys.forEach(k => { if(!arr.find(x => x.k === k)) arr.push({ k, show:true }); });
@@ -1828,7 +1851,7 @@ function openProfile(login){ showProfile(login, true); }
 async function loadProfile(login){
   try{
     const { data } = await sb.from('profiles')
-      .select('twitch_login, display_name, avatar, points, bio, accent, links, music_url, bg_url, layout, fb_verified, fb_name, card_url')
+      .select('twitch_login, display_name, avatar, points, bio, accent, links, music_url, bg_url, layout, fb_verified, fb_name, card_url, music_list')
       .ilike('twitch_login', login).limit(1);
     currentProfile = (data && data[0]) ? data[0] : null;
   }catch(e){ currentProfile = null; }
@@ -1940,10 +1963,10 @@ function renderProfile(){
       <textarea id="pfBio" maxlength="600" placeholder="Tell people who you are, what you stream, your schedule…">${esc(p.bio || '')}</textarea>
       <div class="pf-form-row">
         <div><label>Accent color</label><input type="color" id="pfAccent" value="${accent}"></div>
-        <div><label>Profile music (YouTube / Spotify / SoundCloud link)</label><input id="pfMusic" value="${esc(p.music_url || '')}" placeholder="https://…"></div>
+        <div><label>Background image or GIF (Giphy links work)</label><input id="pfBg" value="${esc(p.bg_url || '')}" placeholder="https://…/image.gif"></div>
       </div>
-      <label>Background image or GIF (paste a link — Giphy page links work too)</label>
-      <input id="pfBg" value="${esc(p.bg_url || '')}" placeholder="https://…/image.gif">
+      <label>Music — one link per line (YouTube, Spotify or SoundCloud). Several = a playlist with ◀ ▶ arrows.</label>
+      <textarea id="pfMusicList" placeholder="https://youtu.be/…&#10;https://open.spotify.com/track/…">${esc((Array.isArray(p.music_list) && p.music_list.length ? p.music_list : (p.music_url ? [p.music_url] : [])).join('\n'))}</textarea>
       <label>Card image or GIF (behind your name — Giphy links work too)</label>
       <input id="pfCard" value="${esc(p.card_url || '')}" placeholder="https://…/image.gif">
       <div class="pf-section-t" style="margin-bottom:8px">Verify your Facebook</div>
@@ -1976,17 +1999,23 @@ function renderProfile(){
     const u = safeUrl(links[d.key]); if(!u) return '';
     return `<a class="pf-link" href="${esc(u)}" target="_blank" rel="noopener"><span class="pf-lk-dot" style="background:${d.color}"></span>${d.label}</a>`;
   }).join('');
-  const music = musicEmbed(p.music_url);
   const sec = {
     bio: p.bio ? `<div class="pf-section-t">About</div><div class="pf-bio">${esc(p.bio)}</div>` : '',
     links: `<div class="pf-section-t">Find me on</div><div class="pf-links">${twitchLink}${linkBtns}</div>`,
-    music: music ? `<div class="pf-section-t">Now playing</div>${music}` : '',
     wall: wallHtml(owner)
   };
   const order = normLayout(p.layout).filter(x => x.show).map(x => sec[x.k]).join('');
-  c.innerHTML = `<div class="pf-card">
+  const tracks = profileTracks(p);
+  playerTracks = tracks; playerIndex = 0;
+  const multi = tracks.length > 1;
+  const playerHtml = tracks.length ? `<div class="pf-player">
+      ${multi ? `<button class="pf-pl-arrow left" onclick="playerPrev()" aria-label="Previous track">◀</button>` : ''}
+      <div class="pf-player-embed" id="pfPlayerEmbed">${musicEmbed(tracks[0])}</div>
+      ${multi ? `<button class="pf-pl-arrow right" onclick="playerNext()" aria-label="Next track">▶</button>` : ''}
+    </div>${multi ? `<div class="pf-pl-count" id="pfPlCount">1 / ${tracks.length}</div>` : ''}` : '';
+  c.innerHTML = `<div class="pf-card${tracks.length ? ' has-player' : ''}">
       ${resolveImg(p.card_url) ? `<div class="pf-card-img" style="background-image:url('${resolveImg(p.card_url)}')"></div>` : ''}
-      ${musicEmbed(p.music_url) ? `<button class="pf-music-btn" onclick="openMusicPopup()"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Music</button>` : ''}
+      ${playerHtml}
       <div class="pf-ava" style="${avaBg}"></div>
       <div class="pf-name">${name}</div>
       <div class="pf-login">@${esc(p.twitch_login)}</div>
@@ -1999,15 +2028,16 @@ function renderProfile(){
 async function saveProfilePage(){
   const bio = document.getElementById('pfBio').value;
   const accent = document.getElementById('pfAccent').value;
-  const music = document.getElementById('pfMusic').value.trim();
+  const musicList = document.getElementById('pfMusicList').value.split('\n').map(s=>normalizeMediaUrl(s.trim())).filter(Boolean).slice(0,8);
+  const music = musicList[0] || '';
   const bg = normalizeMediaUrl(document.getElementById('pfBg').value.trim());
   const card = normalizeMediaUrl(document.getElementById('pfCard').value.trim());
   const layout = editLayout || normLayout(currentProfile.layout);
   const links = {};
   LINK_DEFS.forEach(d=>{ const el = document.getElementById('pf-' + d.key); if(el && el.value.trim()) links[d.key] = el.value.trim(); });
   try{
-    await sb.rpc('save_page', { p_bio: bio, p_accent: accent, p_links: links, p_music: music, p_bg: bg, p_layout: layout, p_card: card });
-    Object.assign(currentProfile, { bio, accent, links, music_url: music, bg_url: bg, layout, card_url: card });
+    await sb.rpc('save_page', { p_bio: bio, p_accent: accent, p_links: links, p_music: music, p_bg: bg, p_layout: layout, p_card: card, p_music_list: musicList });
+    Object.assign(currentProfile, { bio, accent, links, music_url: music, music_list: musicList, bg_url: bg, layout, card_url: card });
     editingProfile = false; editLayout = null;
     renderProfile();
     toast('Your page is saved', '✓');
