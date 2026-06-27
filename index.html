@@ -322,6 +322,25 @@
   .pf-card button.pf-music-btn{position:absolute; top:14px; right:14px; z-index:3; display:inline-flex; align-items:center; gap:6px; background:rgba(0,0,0,.30); border:1px solid rgba(255,255,255,.4); color:#fff; font-weight:700; font-size:12px; padding:7px 12px; border-radius:999px; backdrop-filter:blur(4px); transition:background .12s}
   .pf-card button.pf-music-btn:hover{background:rgba(0,0,0,.5)}
   .music-modal{position:relative; max-width:420px; width:100%; padding:0; background:transparent; border:none}
+  .admin-open-btn{background:rgba(255,92,57,.12)!important; border:1px solid rgba(255,92,57,.4)!important; color:var(--accent)!important; margin-top:8px}
+  .admin-modal{max-width:560px; width:100%; max-height:82vh; display:flex; flex-direction:column; text-align:left; padding:20px}
+  .admin-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; font-family:'Bricolage Grotesque',sans-serif; font-size:18px}
+  .admin-list{overflow-y:auto; display:flex; flex-direction:column; gap:11px; padding-right:4px}
+  .admin-empty{color:var(--dim); text-align:center; padding:30px 10px; font-size:14px}
+  .admin-row{background:var(--bg); border:1px solid var(--border); border-radius:13px; padding:13px 15px}
+  .admin-meta{font-size:12.5px; color:var(--faint); margin-bottom:7px}
+  .admin-who{color:var(--text); font-weight:700; cursor:pointer}
+  .admin-who:hover{color:var(--accent)}
+  .admin-on{color:var(--faint); font-weight:400}
+  .admin-body{font-size:14.5px; line-height:1.5; white-space:pre-wrap; word-break:break-word; margin-bottom:11px}
+  .admin-foot{display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap}
+  .admin-flags{font-size:12px; color:var(--dim)}
+  .admin-hid{color:#FF5C5C}
+  .admin-acts{display:flex; gap:7px}
+  .admin-approve{background:rgba(61,220,151,.14); border:1px solid rgba(61,220,151,.4); color:var(--good); font-weight:700; font-size:12.5px; padding:6px 14px; border-radius:9px}
+  .admin-approve:hover{background:rgba(61,220,151,.24)}
+  .admin-del{background:rgba(255,92,92,.12); border:1px solid rgba(255,92,92,.4); color:#FF6B6B; font-weight:700; font-size:12.5px; padding:6px 14px; border-radius:9px}
+  .admin-del:hover{background:rgba(255,92,92,.22)}
   .music-close{position:absolute; top:-38px; right:0; width:32px; height:32px; border-radius:50%; background:var(--surface-2); border:1px solid var(--border); color:var(--text); font-size:14px; line-height:1}
   .music-close:hover{border-color:var(--border-2)}
   #musicPopupBody .pf-embed{margin-top:0; height:160px}
@@ -589,6 +608,7 @@
           </div>
         </div>
         <button class="mypage-btn" id="myPageBtn" style="display:none" onclick="if(me)openProfile(me.login)">View &amp; edit my page →</button>
+        <button class="mypage-btn admin-open-btn" id="adminBtn" style="display:none" onclick="openAdmin()">⚑ Review reported posts</button>
       </div>
 
       <div class="panel" id="boostPanel" style="display:none">
@@ -640,6 +660,13 @@
       <span class="fb-count" id="ageErr"></span>
       <button class="fb-submit" id="ageSubmit" onclick="submitAge()">Continue</button>
     </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="adminModal" onclick="if(event.target===this)closeAdmin()">
+  <div class="modal admin-modal">
+    <div class="admin-head"><b>Reported posts</b><button class="music-close" style="position:static" onclick="closeAdmin()" aria-label="Close">✕</button></div>
+    <div id="adminList" class="admin-list"></div>
   </div>
 </div>
 
@@ -808,6 +835,7 @@ async function afterConnect(){
     startAutoRefresh();
     renderMatureNote();
     document.getElementById('myPageBtn').style.display = 'block';
+    document.getElementById('adminBtn').style.display = isAdminUser() ? 'block' : 'none';
     let fbLinking = false; try{ fbLinking = !!localStorage.getItem('lineup_fb_linking'); }catch(e){}
     if(fbLinking){ try{ localStorage.removeItem('lineup_fb_linking'); }catch(e){} verifyFb(); }
     if(viewingProfile && document.getElementById('profile').style.display === 'block') renderProfile();
@@ -1149,6 +1177,7 @@ async function disconnectTwitch(){
   document.getElementById('offlineList').style.display = 'none';
   document.getElementById('ageModal').style.display = 'none';
   document.getElementById('myPageBtn').style.display = 'none';
+  document.getElementById('adminBtn').style.display = 'none';
   renderGoLive(); renderMatureNote();
   updatePointsDisplay();
   document.getElementById('browseBar').style.display = 'none';
@@ -1937,6 +1966,55 @@ function wallHtml(owner){
     }).join('') + '</div>';
   }
   return html;
+}
+const ADMIN_LOGIN = 'xmxj90x';
+function isAdminUser(){ return !!(me && me.login && me.login.toLowerCase() === ADMIN_LOGIN); }
+async function openAdmin(){
+  if(!isAdminUser()) return;
+  document.getElementById('adminModal').style.display = 'flex';
+  lockScroll(true);
+  await loadReported();
+}
+function closeAdmin(){
+  document.getElementById('adminModal').style.display = 'none';
+  if(document.getElementById('profile').style.display !== 'block') lockScroll(false);
+}
+async function loadReported(){
+  const list = document.getElementById('adminList');
+  list.innerHTML = '<div class="admin-empty">Loading…</div>';
+  try{
+    const { data, error } = await sb.rpc('admin_reported_posts');
+    if(error) throw error;
+    if(!data || !data.length){ list.innerHTML = '<div class="admin-empty">Nothing reported right now — all clear.</div>'; return; }
+    list.innerHTML = data.map(p=>{
+      const who = esc(p.author_name || p.author_login || 'someone');
+      return `<div class="admin-row" id="adminrow-${p.id}">
+        <div class="admin-meta"><span class="admin-who" onclick="closeAdmin();openProfile('${p.author_login}')">${who}</span> <span class="admin-on">on</span> <span class="admin-who" onclick="closeAdmin();openProfile('${p.wall_login}')">@${esc(p.wall_login)}</span>'s wall · ${timeAgo(new Date(p.created_at).getTime())}</div>
+        <div class="admin-body">${esc(p.body)}</div>
+        <div class="admin-foot">
+          <span class="admin-flags">⚑ ${p.reports} report${p.reports===1?'':'s'}${p.hidden?' · <b class="admin-hid">auto-hidden</b>':''}</span>
+          <span class="admin-acts">
+            <button class="admin-approve" onclick="adminApprove(${p.id})">Approve</button>
+            <button class="admin-del" onclick="adminDelete(${p.id})">Delete</button>
+          </span>
+        </div>
+      </div>`;
+    }).join('');
+  }catch(e){ list.innerHTML = '<div class="admin-empty">Couldn\'t load — make sure you\'re signed in as the admin account.</div>'; }
+}
+function adminRowGone(id){
+  const row = document.getElementById('adminrow-' + id); if(row) row.remove();
+  if(!document.querySelector('.admin-row')) document.getElementById('adminList').innerHTML = '<div class="admin-empty">Nothing reported right now — all clear.</div>';
+}
+async function adminApprove(id){
+  try{ const { error } = await sb.rpc('admin_approve_post', { p_post_id: id }); if(error) throw error;
+    adminRowGone(id); toast('Approved — post restored', '✓');
+  }catch(e){ toast("Couldn't approve — try again", '✕'); }
+}
+async function adminDelete(id){
+  try{ const { error } = await sb.rpc('admin_delete_post', { p_post_id: id }); if(error) throw error;
+    adminRowGone(id); toast('Post deleted', '✓');
+  }catch(e){ toast("Couldn't delete — try again", '✕'); }
 }
 function lockScroll(on){
   document.documentElement.classList.toggle('overlay-open', on);
