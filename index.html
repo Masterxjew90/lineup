@@ -599,8 +599,8 @@
 </div>
 
 <footer>
-  Lineup — Phase 1 discovery hub. Live streamer data comes from the Twitch API; accounts, points and the leaderboard run on a shared database.<br>
-  Points are awarded server-side with cooldowns enforced in the database, so scores are shared across everyone and can't be edited from the browser.
+  Lineup — a free space for small streamers to find each other and grow together.<br>
+  Not affiliated with Twitch, Meta, or any other platform. <a href="privacy.html" style="color:var(--dim)">Privacy &amp; Terms</a>
 </footer>
 
 <div class="modal-bg" id="ageModal">
@@ -1694,7 +1694,7 @@ function renderOffline(){
     const url = 'https://twitch.tv/' + m.twitch_login;
     const bg = m.avatar ? `background-image:url('${m.avatar}'); background-size:cover`
                         : `background:linear-gradient(135deg, hsl(${hue(name)} 55% 55%), hsl(${(hue(name)+50)%360} 60% 42%))`;
-    return `<div class="offline-row clickable" onclick="window.open('${url}','_blank','noopener')"><span class="off-ava" style="${bg}"></span><span class="off-name">${name}</span><span class="off-pts">${m.points} pts</span></div>`;
+    return `<div class="offline-row clickable" onclick="openProfile('${m.twitch_login}')"><span class="off-ava" style="${bg}"></span><span class="off-name">${name}</span><span class="off-pts">${m.points} pts</span></div>`;
   }).join('');
 }
 function toast(html, pts){
