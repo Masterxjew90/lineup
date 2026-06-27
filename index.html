@@ -854,6 +854,11 @@ async function connectProvider(p){
   const { error } = await sb.auth.signInWithOAuth({ provider: p, options: { redirectTo: REDIRECT_URI } });
   if(error) showBanner('warn', "Couldn't start sign-in: " + error.message);
 }
+async function linkTwitch(){
+  showBanner('info', 'Opening Twitch to link your account…');
+  const { error } = await sb.auth.linkIdentity({ provider: 'twitch', options: { scopes: TWITCH_SCOPES, redirectTo: REDIRECT_URI } });
+  if(error) toast("Couldn't start Twitch link: " + error.message, '✕');
+}
 function provName(p){
   return ({ facebook:'Facebook', google:'Google', discord:'Discord', twitch:'Twitch' })[p] || '';
 }
@@ -930,9 +935,9 @@ function renderLiteHub(twitchLinked){
     <h2>Welcome to Lineup</h2>
     <p>${twitchLinked
         ? "You're signed in. To load your live follows and discovery, connect your Twitch — or just set up your page and explore for now."
-        : "You're signed in" + (provName(me.provider) ? ' with ' + provName(me.provider) : '') + ". Live-stream discovery runs on Twitch, Kick, and YouTube — you can connect one of those later to show when you're live. For now, set up your page, leave messages on creators' walls, and climb the leaderboard."}</p>
+        : "You're signed in" + (provName(me.provider) ? ' with ' + provName(me.provider) : '') + ". You've got a profile, points, walls and the leaderboard. To go live and unlock discovery, link a Twitch account — or just explore for now."}</p>
     <div class="lite-actions">
-      ${twitchLinked ? `<button class="lite-cta tw" onclick="connectTwitch()"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M4 3 3 6v12h4v3h3l3-3h4l5-5V3H4zm16 9-3 3h-4l-3 3v-3H6V5h14v7zM15 8h-2v5h2V8zm-5 0H8v5h2V8z"/></svg> Connect Twitch</button>` : ''}
+      <button class="lite-cta tw" onclick="${twitchLinked ? 'connectTwitch()' : 'linkTwitch()'}"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M4 3 3 6v12h4v3h3l3-3h4l5-5V3H4zm16 9-3 3h-4l-3 3v-3H6V5h14v7zM15 8h-2v5h2V8zm-5 0H8v5h2V8z"/></svg> ${twitchLinked ? 'Connect Twitch' : 'Link Twitch for full access'}</button>
       <button class="lite-cta" onclick="if(me)openProfile(me.username || '')">Set up my page →</button>
     </div>
   </div>`;
@@ -2377,14 +2382,14 @@ function renderProfile(){
     return;
   }
 
-  const twitchLink = `<a class="pf-link" href="https://twitch.tv/${esc(p.twitch_login)}" target="_blank" rel="noopener"><span class="pf-lk-dot" style="background:#A56BFF"></span>Twitch</a>`;
+  const twitchLink = p.twitch_login ? `<a class="pf-link" href="https://twitch.tv/${esc(p.twitch_login)}" target="_blank" rel="noopener"><span class="pf-lk-dot" style="background:#A56BFF"></span>Twitch</a>` : '';
   const linkBtns = LINK_DEFS.map(d=>{
     const u = safeUrl(links[d.key]); if(!u) return '';
     return `<a class="pf-link" href="${esc(u)}" target="_blank" rel="noopener"><span class="pf-lk-dot" style="background:${d.color}"></span>${d.label}</a>`;
   }).join('');
   const sec = {
     bio: p.bio ? `<div class="pf-section-t">About</div><div class="pf-bio">${esc(p.bio)}</div>` : '',
-    links: `<div class="pf-section-t">Find me on</div><div class="pf-links">${twitchLink}${linkBtns}</div>`,
+    links: (twitchLink || linkBtns) ? `<div class="pf-section-t">Find me on</div><div class="pf-links">${twitchLink}${linkBtns}</div>` : '',
     wall: '<div id="pfWall">' + wallHtml(owner) + '</div>'
   };
   const order = normLayout(p.layout).filter(x => x.show).map(x => sec[x.k]).join('');
