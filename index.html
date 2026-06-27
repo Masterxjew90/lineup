@@ -323,6 +323,19 @@
   .pf-save .cancel{background:var(--surface-2); border:1px solid var(--border); color:var(--text)}
   .pf-empty{text-align:center; padding:70px 20px; color:var(--dim)}
   .pf-empty b{display:block; font-family:'Bricolage Grotesque',sans-serif; font-size:22px; color:var(--text); margin-bottom:8px}
+  .pf-postbox{display:flex; flex-direction:column; gap:9px; background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:13px}
+  .pf-postbox textarea{width:100%; background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:11px 12px; color:var(--text); font-family:inherit; font-size:14px; min-height:62px; resize:vertical; outline:none; line-height:1.5}
+  .pf-postbox textarea:focus{border-color:var(--paccent)}
+  .pf-post-btn{align-self:flex-end; background:var(--paccent); color:#fff; font-weight:700; font-size:13.5px; padding:9px 20px; border-radius:10px}
+  .pf-post-btn:hover{filter:brightness(1.07)} .pf-post-btn:disabled{opacity:.5}
+  .pf-posts{display:flex; flex-direction:column; gap:10px; margin-top:12px}
+  .pf-post{background:var(--surface); border:1px solid var(--border); border-radius:13px; padding:13px 15px}
+  .pf-post-body{font-size:14.5px; line-height:1.55; white-space:pre-wrap; word-break:break-word}
+  .pf-post-body a{color:var(--paccent)}
+  .pf-post-meta{display:flex; align-items:center; justify-content:space-between; margin-top:8px; font-size:11.5px; color:var(--faint)}
+  .pf-del{color:var(--faint); font-size:13px; padding:2px 7px; border-radius:6px; line-height:1}
+  .pf-del:hover{color:#FF5C5C; background:rgba(255,92,92,.12)}
+  .pf-noposts{text-align:center; color:var(--faint); font-size:13.5px; padding:18px}
   .mypage-btn{width:100%; margin-top:13px; background:var(--surface-2); border:1px solid var(--border); color:var(--text); font-weight:600; font-size:13px; padding:10px; border-radius:10px; transition:border-color .12s}
   .mypage-btn:hover{border-color:var(--accent); color:var(--accent)}
   @media(max-width:560px){ .pf-links, .pf-form-row{grid-template-columns:1fr} }
@@ -1678,6 +1691,7 @@ function toast(html, pts){
 let viewingProfile = null;   // login currently being viewed
 let currentProfile = undefined;  // undefined=loading, null=not found, object=loaded
 let editingProfile = false;
+let profilePosts = [];
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function safeUrl(u){ u = (u||'').trim(); return /^https?:\/\//i.test(u) ? u : null; }
 const LINK_DEFS = [
@@ -1715,7 +1729,76 @@ async function loadProfile(login){
       .ilike('twitch_login', login).limit(1);
     currentProfile = (data && data[0]) ? data[0] : null;
   }catch(e){ currentProfile = null; }
+  if(currentProfile) await loadPosts(login);
   renderProfile();
+}
+async function loadPosts(login){
+  profilePosts = [];
+  try{
+    const { data } = await sb.from('posts')
+      .select('id, body, created_at')
+      .eq('author_login', login.toLowerCase())
+      .order('created_at', { ascending:false }).limit(50);
+    profilePosts = data || [];
+  }catch(e){}
+}
+function linkify(text){
+  return esc(text).replace(/(https?:\/\/[^\s<]+)/g, u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`);
+}
+function timeAgo(ms){
+  const s = Math.floor((Date.now() - ms)/1000);
+  if(s < 60) return 'just now';
+  if(s < 3600) return Math.floor(s/60) + 'm ago';
+  if(s < 86400) return Math.floor(s/3600) + 'h ago';
+  if(s < 604800) return Math.floor(s/86400) + 'd ago';
+  return new Date(ms).toLocaleDateString();
+}
+function wallHtml(owner){
+  let html = `<div class="pf-section-t">Wall</div>`;
+  if(owner){
+    html += `<div class="pf-postbox">
+      <textarea id="pfPost" maxlength="500" placeholder="Post an update — going live soon, new VOD, a thank-you to your raiders…"></textarea>
+      <button class="pf-post-btn" onclick="addPost()">Post</button>
+    </div>`;
+  }
+  if(!profilePosts.length){
+    html += `<div class="pf-noposts">${owner ? 'No posts yet — share something above.' : 'No posts yet.'}</div>`;
+  } else {
+    html += '<div class="pf-posts">' + profilePosts.map(po=>{
+      const del = owner ? `<button class="pf-del" onclick="deletePost(${po.id})" title="Delete post">✕</button>` : '';
+      return `<div class="pf-post"><div class="pf-post-body">${linkify(po.body)}</div><div class="pf-post-meta"><span>${timeAgo(new Date(po.created_at).getTime())}</span>${del}</div></div>`;
+    }).join('') + '</div>';
+  }
+  return html;
+}
+async function addPost(){
+  const ta = document.getElementById('pfPost'); const body = (ta.value || '').trim();
+  if(!body) return;
+  const btn = document.querySelector('.pf-post-btn');
+  if(btn){ btn.disabled = true; btn.textContent = 'Posting…'; }
+  try{
+    const { error } = await sb.rpc('add_post', { p_body: body });
+    if(error){
+      const m = (error.message || '').toLowerCase();
+      if(m.includes('too fast')) toast('Give it a few seconds between posts', '⏳');
+      else if(m.includes('daily limit')) toast("That's enough posts for today", '✋');
+      else toast("Couldn't post — try again", '✕');
+      if(btn){ btn.disabled = false; btn.textContent = 'Post'; }
+      return;
+    }
+    ta.value = '';
+    await loadPosts(viewingProfile);
+    renderProfile();
+    toast('Posted', '✓');
+  }catch(e){ if(btn){ btn.disabled = false; btn.textContent = 'Post'; } toast("Couldn't post — try again", '✕'); }
+}
+async function deletePost(id){
+  try{
+    const { error } = await sb.from('posts').delete().eq('id', id);
+    if(error) throw error;
+    profilePosts = profilePosts.filter(p => p.id !== id);
+    renderProfile();
+  }catch(e){ toast("Couldn't delete — try again", '✕'); }
 }
 function closeProfile(){
   viewingProfile = null; editingProfile = false;
@@ -1778,7 +1861,8 @@ function renderProfile(){
     </div>
     <div class="pf-section-t">Find me on</div>
     <div class="pf-links">${twitchLink}${linkBtns}</div>
-    ${music ? `<div class="pf-section-t">Now playing</div>${music}` : ''}`;
+    ${music ? `<div class="pf-section-t">Now playing</div>${music}` : ''}
+    ${wallHtml(owner)}`;
 }
 async function saveProfilePage(){
   const bio = document.getElementById('pfBio').value;
