@@ -1858,6 +1858,7 @@ async function showProfile(login, push){
   window.scrollTo(0,0);
   renderProfile();
   await loadProfile(login);
+  startProfilePoll();
 }
 function openProfile(login){ showProfile(login, true); }
 async function loadProfile(login){
@@ -1934,6 +1935,25 @@ function wallHtml(owner){
   }
   return html;
 }
+function refreshWall(){
+  const el = document.getElementById('pfWall');
+  if(!el || !currentProfile) return;
+  const owner = me && me.login && me.login.toLowerCase() === currentProfile.twitch_login.toLowerCase();
+  el.innerHTML = wallHtml(owner);
+}
+let profilePollTimer = null;
+function startProfilePoll(){
+  if(profilePollTimer) clearInterval(profilePollTimer);
+  profilePollTimer = setInterval(async ()=>{
+    if(!viewingProfile || editingProfile || document.hidden) return;
+    if(document.getElementById('profile').style.display !== 'block') return;
+    const ta = document.getElementById('pfPost');
+    if(ta && (document.activeElement === ta || ta.value.trim())) return;  // don't wipe a draft
+    await loadPosts(viewingProfile);
+    refreshWall();
+  }, 20000);
+}
+function stopProfilePoll(){ if(profilePollTimer){ clearInterval(profilePollTimer); profilePollTimer = null; } }
 async function toggleGuestbook(){
   if(!currentProfile) return;
   const next = !currentProfile.guestbook_open;
@@ -1941,7 +1961,7 @@ async function toggleGuestbook(){
     const { error } = await sb.rpc('set_guestbook', { p_open: next });
     if(error) throw error;
     currentProfile.guestbook_open = next;
-    renderProfile();
+    refreshWall();
     toast(next ? 'Guestbook opened to others' : 'Guestbook closed', next ? '🔓' : '🔒');
   }catch(e){ toast("Couldn't update guestbook", '✕'); }
 }
@@ -1962,9 +1982,8 @@ async function addPost(){
       if(btn){ btn.disabled = false; btn.textContent = 'Post'; }
       return;
     }
-    ta.value = '';
     await loadPosts(viewingProfile);
-    renderProfile();
+    refreshWall();   // updates only the wall, so music keeps playing
     toast('Posted', '✓');
   }catch(e){ if(btn){ btn.disabled = false; btn.textContent = 'Post'; } toast("Couldn't post — try again", '✕'); }
 }
@@ -1973,7 +1992,7 @@ async function reportPost(id){
     const { error } = await sb.rpc('report_post', { p_post_id: id });
     if(error) throw error;
     toast('Reported — thanks for flagging', '⚑');
-    await loadPosts(viewingProfile); renderProfile();
+    await loadPosts(viewingProfile); refreshWall();
   }catch(e){ toast("Couldn't report — try again", '✕'); }
 }
 async function blockPoster(login){
@@ -1981,7 +2000,7 @@ async function blockPoster(login){
   try{
     const { error } = await sb.rpc('block_from_wall', { p_blocked_login: login });
     if(error) throw error;
-    await loadPosts(viewingProfile); renderProfile();
+    await loadPosts(viewingProfile); refreshWall();
     toast(login + ' blocked from your wall', '⛔');
   }catch(e){ toast("Couldn't block — try again", '✕'); }
 }
@@ -1990,11 +2009,12 @@ async function deletePost(id){
     const { error } = await sb.from('posts').delete().eq('id', id);
     if(error) throw error;
     profilePosts = profilePosts.filter(p => p.id !== id);
-    renderProfile();
+    refreshWall();
   }catch(e){ toast("Couldn't delete — try again", '✕'); }
 }
 function closeProfile(){
   viewingProfile = null; editingProfile = false; editLayout = null;
+  stopProfilePoll();
   history.pushState({}, '', location.pathname);
   document.getElementById('profile').style.display = 'none';
   closeMusicPopup();
@@ -2069,7 +2089,7 @@ function renderProfile(){
   const sec = {
     bio: p.bio ? `<div class="pf-section-t">About</div><div class="pf-bio">${esc(p.bio)}</div>` : '',
     links: `<div class="pf-section-t">Find me on</div><div class="pf-links">${twitchLink}${linkBtns}</div>`,
-    wall: wallHtml(owner)
+    wall: '<div id="pfWall">' + wallHtml(owner) + '</div>'
   };
   const order = normLayout(p.layout).filter(x => x.show).map(x => sec[x.k]).join('');
   const tracks = profileTracks(p);
@@ -2113,7 +2133,7 @@ async function saveProfilePage(){
 window.addEventListener('popstate', ()=>{
   const u = new URLSearchParams(location.search).get('u');
   if(u) showProfile(u, false);
-  else { viewingProfile = null; document.getElementById('profile').style.display = 'none'; }
+  else { viewingProfile = null; stopProfilePoll(); document.getElementById('profile').style.display = 'none'; }
 });
 
 async function renderLeaderboard(){
