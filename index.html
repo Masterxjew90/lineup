@@ -309,6 +309,12 @@
   .pf-card-img{position:absolute; inset:0; z-index:0; background-size:cover; background-position:center}
   .pf-card-img::after{content:''; position:absolute; inset:0; background:linear-gradient(rgba(25,27,33,.55), rgba(25,27,33,.85))}
   .pf-card > *:not(.pf-card-img){position:relative; z-index:2}
+  .pf-card button.pf-music-btn{position:absolute; top:14px; right:14px; z-index:3; display:inline-flex; align-items:center; gap:6px; background:rgba(0,0,0,.30); border:1px solid rgba(255,255,255,.4); color:#fff; font-weight:700; font-size:12px; padding:7px 12px; border-radius:999px; backdrop-filter:blur(4px); transition:background .12s}
+  .pf-card button.pf-music-btn:hover{background:rgba(0,0,0,.5)}
+  .music-modal{position:relative; max-width:420px; width:100%; padding:0; background:transparent; border:none}
+  .music-close{position:absolute; top:-38px; right:0; width:32px; height:32px; border-radius:50%; background:var(--surface-2); border:1px solid var(--border); color:var(--text); font-size:14px; line-height:1}
+  .music-close:hover{border-color:var(--border-2)}
+  #musicPopupBody .pf-embed{margin-top:0; height:160px}
   .pf-ava{width:104px; height:104px; border-radius:50%; margin:18px auto 0; background-size:cover; background-position:center; border:4px solid var(--surface); position:relative; box-shadow:0 6px 20px rgba(0,0,0,.35)}
   .pf-name{font-family:'Bricolage Grotesque',sans-serif; font-weight:800; font-size:26px; letter-spacing:-.02em; margin-top:14px}
   .pf-login{color:var(--dim); font-size:14px; margin-top:2px}
@@ -612,6 +618,13 @@
       <span class="fb-count" id="ageErr"></span>
       <button class="fb-submit" id="ageSubmit" onclick="submitAge()">Continue</button>
     </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="musicPopup" onclick="if(event.target===this)closeMusicPopup()">
+  <div class="modal music-modal">
+    <button class="music-close" onclick="closeMusicPopup()" aria-label="Close">✕</button>
+    <div id="musicPopupBody"></div>
   </div>
 </div>
 
@@ -1742,6 +1755,17 @@ function normalizeMediaUrl(u){
   return u;
 }
 function resolveImg(u){ return safeBgUrl(normalizeMediaUrl(u)); }
+function openMusicPopup(){
+  if(!currentProfile) return;
+  const e = musicEmbed(currentProfile.music_url);
+  if(!e) return;
+  document.getElementById('musicPopupBody').innerHTML = e;
+  document.getElementById('musicPopup').style.display = 'flex';
+}
+function closeMusicPopup(){
+  document.getElementById('musicPopup').style.display = 'none';
+  document.getElementById('musicPopupBody').innerHTML = '';   // stops playback
+}
 function applyBg(url){
   const layer = document.getElementById('pfBgLayer');
   const bg = resolveImg(url);
@@ -1883,6 +1907,7 @@ function closeProfile(){
   viewingProfile = null; editingProfile = false; editLayout = null;
   history.pushState({}, '', location.pathname);
   document.getElementById('profile').style.display = 'none';
+  closeMusicPopup();
   applyBg('');
 }
 function copyProfileLink(){
@@ -1961,6 +1986,7 @@ function renderProfile(){
   const order = normLayout(p.layout).filter(x => x.show).map(x => sec[x.k]).join('');
   c.innerHTML = `<div class="pf-card">
       ${resolveImg(p.card_url) ? `<div class="pf-card-img" style="background-image:url('${resolveImg(p.card_url)}')"></div>` : ''}
+      ${musicEmbed(p.music_url) ? `<button class="pf-music-btn" onclick="openMusicPopup()"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Music</button>` : ''}
       <div class="pf-ava" style="${avaBg}"></div>
       <div class="pf-name">${name}</div>
       <div class="pf-login">@${esc(p.twitch_login)}</div>
