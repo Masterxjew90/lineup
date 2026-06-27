@@ -2169,7 +2169,7 @@ async function deleteAccount(){
     try{ localStorage.clear(); }catch(e){}
     toast('Your account has been deleted', '✓');
     setTimeout(()=>{ location.href = location.pathname; }, 900);
-  }catch(e){ toast("Couldn't delete — try again", '✕'); }
+  }catch(e){ toast('Delete failed: ' + ((e && e.message) || 'unknown error'), '✕'); }
 }
 async function deletePost(id){
   try{
