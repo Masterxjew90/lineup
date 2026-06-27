@@ -614,7 +614,7 @@
             <div class="you-sub">points</div>
           </div>
         </div>
-        <button class="mypage-btn" id="myPageBtn" style="display:none" onclick="if(me)openProfile(me.login)">View &amp; edit my page →</button>
+        <button class="mypage-btn" id="myPageBtn" style="display:none" onclick="if(me)openProfile(me.username || me.login)">View &amp; edit my page →</button>
         <button class="mypage-btn admin-open-btn" id="adminBtn" style="display:none" onclick="openAdmin()">⚑ Review reported posts</button>
       </div>
 
@@ -1788,7 +1788,7 @@ async function loadLineup(){
   let members = [];
   try{
     const { data } = await sb.from('profiles')
-      .select('twitch_login, display_name, avatar, points, listed_at, feat_remaining_secs, feat_running_since')
+      .select('twitch_login, display_name, avatar, points, listed_at, feat_remaining_secs, feat_running_since, username')
       .not('listed_at', 'is', null)
       .order('points', { ascending:false })
       .limit(100);
@@ -1828,7 +1828,7 @@ function renderOffline(){
     const url = 'https://twitch.tv/' + m.twitch_login;
     const bg = m.avatar ? `background-image:url('${m.avatar}'); background-size:cover`
                         : `background:linear-gradient(135deg, hsl(${hue(name)} 55% 55%), hsl(${(hue(name)+50)%360} 60% 42%))`;
-    return `<div class="offline-row clickable" onclick="openProfile('${m.twitch_login}')"><span class="off-ava" style="${bg}"></span><span class="off-name">${name}</span><span class="off-pts">${m.points} pts</span></div>`;
+    return `<div class="offline-row clickable" onclick="openProfile('${pid(m)}')"><span class="off-ava" style="${bg}"></span><span class="off-name">${name}</span><span class="off-pts">${m.points} pts</span></div>`;
   }).join('');
 }
 function toast(html, pts){
@@ -1928,7 +1928,7 @@ async function verifyFb(){
     if(data && data.verified) showBanner('ok', 'Facebook verified on your profile.');
     else showBanner('info', "Facebook wasn't connected — try the Connect Facebook button again.");
   }catch(e){}
-  if(viewingProfile && me && viewingProfile === me.login.toLowerCase()) await loadProfile(viewingProfile);
+  if(viewingProfile && me && viewingProfile === (me.username || me.login || '').toLowerCase()) await loadProfile(viewingProfile);
 }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function safeUrl(u){ u = (u||'').trim(); return /^https?:\/\//i.test(u) ? u : null; }
@@ -1963,22 +1963,27 @@ async function showProfile(login, push){
   startProfilePoll();
 }
 function openProfile(login){ showProfile(login, true); }
-async function loadProfile(login){
+function pid(x){ return x && (x.username || x.twitch_login) || ''; }
+function isMe(p){ return !!(me && p && ((me.username && p.username && me.username.toLowerCase() === p.username.toLowerCase()) || (me.login && p.twitch_login && me.login.toLowerCase() === p.twitch_login.toLowerCase()))); }
+async function loadProfile(handle){
+  handle = (handle || '').toLowerCase();
+  const cols = 'twitch_login, display_name, avatar, points, bio, accent, links, music_url, bg_url, layout, fb_verified, fb_name, card_url, music_list, guestbook_open, username';
   try{
-    const { data } = await sb.from('profiles')
-      .select('twitch_login, display_name, avatar, points, bio, accent, links, music_url, bg_url, layout, fb_verified, fb_name, card_url, music_list, guestbook_open, username')
-      .ilike('twitch_login', login).limit(1);
+    let { data } = await sb.from('profiles').select(cols).ilike('username', handle).limit(1);
+    if(!data || !data.length){ const r2 = await sb.from('profiles').select(cols).ilike('twitch_login', handle).limit(1); data = r2.data; }
     currentProfile = (data && data[0]) ? data[0] : null;
   }catch(e){ currentProfile = null; }
-  if(currentProfile) await loadPosts(login);
+  if(currentProfile) await loadPosts();
   renderProfile();
 }
-async function loadPosts(login){
+async function loadPosts(){
   profilePosts = [];
+  const wall = currentProfile && currentProfile.twitch_login ? currentProfile.twitch_login.toLowerCase() : null;
+  if(!wall) return;
   try{
     const { data } = await sb.from('posts')
       .select('id, body, created_at, author_login, author_name')
-      .eq('wall_login', login.toLowerCase())
+      .eq('wall_login', wall)
       .eq('hidden', false)
       .order('created_at', { ascending:false }).limit(50);
     profilePosts = data || [];
@@ -2093,7 +2098,7 @@ function lockScroll(on){
 function refreshWall(){
   const el = document.getElementById('pfWall');
   if(!el || !currentProfile) return;
-  const owner = me && me.login && me.login.toLowerCase() === currentProfile.twitch_login.toLowerCase();
+  const owner = isMe(currentProfile);
   el.innerHTML = wallHtml(owner);
 }
 let profilePollTimer = null;
@@ -2104,7 +2109,7 @@ function startProfilePoll(){
     if(document.getElementById('profile').style.display !== 'block') return;
     const ta = document.getElementById('pfPost');
     if(ta && (document.activeElement === ta || ta.value.trim())) return;  // don't wipe a draft
-    await loadPosts(viewingProfile);
+    await loadPosts();
     refreshWall();
   }, 20000);
 }
@@ -2126,7 +2131,8 @@ async function addPost(){
   const btn = document.querySelector('.pf-post-btn');
   if(btn){ btn.disabled = true; btn.textContent = 'Posting…'; }
   try{
-    const { error } = await sb.rpc('add_wall_post', { p_wall_login: viewingProfile, p_body: body });
+    const wallLogin = currentProfile && currentProfile.twitch_login ? currentProfile.twitch_login : viewingProfile;
+    const { error } = await sb.rpc('add_wall_post', { p_wall_login: wallLogin, p_body: body });
     if(error){
       const m = (error.message || '').toLowerCase();
       if(m.includes('too fast')) toast('Give it a few seconds between posts', '⏳');
@@ -2137,7 +2143,7 @@ async function addPost(){
       if(btn){ btn.disabled = false; btn.textContent = 'Post'; }
       return;
     }
-    await loadPosts(viewingProfile);
+    await loadPosts();
     refreshWall();   // updates only the wall, so music keeps playing
     toast('Posted', '✓');
   }catch(e){ if(btn){ btn.disabled = false; btn.textContent = 'Post'; } toast("Couldn't post — try again", '✕'); }
@@ -2147,7 +2153,7 @@ async function reportPost(id){
     const { error } = await sb.rpc('report_post', { p_post_id: id });
     if(error) throw error;
     toast('Reported — thanks for flagging', '⚑');
-    await loadPosts(viewingProfile); refreshWall();
+    await loadPosts(); refreshWall();
   }catch(e){ toast("Couldn't report — try again", '✕'); }
 }
 async function blockPoster(login){
@@ -2155,7 +2161,7 @@ async function blockPoster(login){
   try{
     const { error } = await sb.rpc('block_from_wall', { p_blocked_login: login });
     if(error) throw error;
-    await loadPosts(viewingProfile); refreshWall();
+    await loadPosts(); refreshWall();
     toast(login + ' blocked from your wall', '⛔');
   }catch(e){ toast("Couldn't block — try again", '✕'); }
 }
@@ -2190,7 +2196,8 @@ function closeProfile(){
 }
 function copyProfileLink(){
   if(!viewingProfile) return;
-  const url = location.origin + location.pathname + '?u=' + encodeURIComponent(viewingProfile);
+  const handle = (currentProfile && pid(currentProfile)) || viewingProfile;
+  const url = location.origin + location.pathname + '?u=' + encodeURIComponent(handle);
   if(navigator.clipboard){ navigator.clipboard.writeText(url).then(()=>toast('Profile link copied','🔗')).catch(()=>{}); }
 }
 function renderProfile(){
@@ -2201,7 +2208,7 @@ function renderProfile(){
   const accent = (p.accent && /^#[0-9A-Fa-f]{6}$/.test(p.accent)) ? p.accent : '#FF5C39';
   document.getElementById('profile').style.setProperty('--paccent', accent);
   applyBg(p.bg_url);
-  const owner = me && me.login && me.login.toLowerCase() === p.twitch_login.toLowerCase();
+  const owner = isMe(p);
   const name = esc(p.display_name || p.twitch_login);
   const avaBg = p.avatar ? `background-image:url('${esc(p.avatar)}')` : `background:linear-gradient(135deg, ${accent}, #FF3B7C)`;
   const links = (p.links && typeof p.links === 'object') ? p.links : {};
@@ -2314,7 +2321,7 @@ async function renderLeaderboard(){
   let rows = [];
   try{
     const { data } = await sb.from('profiles')
-      .select('display_name, avatar, points, twitch_login')
+      .select('display_name, avatar, points, twitch_login, username')
       .order('points', { ascending: false })
       .limit(8);
     rows = data || [];
@@ -2334,7 +2341,7 @@ async function renderLeaderboard(){
                         : `background:linear-gradient(135deg, hsl(${hue(name)} 55% 55%), hsl(${(hue(name)+50)%360} 60% 42%))`;
     const ext = url ? `<span class="lb-ext" onclick="event.stopPropagation(); window.open('${url}','_blank','noopener')" title="Open on Twitch"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3"/></svg></span>` : '';
     const cls = `lb-row ${mine?'me':''} ${rank<=3?'top'+rank:''} clickable`;
-    const click = `onclick="openProfile('${r.twitch_login}')" title="View ${name}'s page"`;
+    const click = `onclick="openProfile('${pid(r)}')" title="View ${name}'s page"`;
     return `<div class="${cls}" ${click}>
       <span class="lb-num">${rank}</span>
       <span class="lb-ava" style="${bg}"></span>
