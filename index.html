@@ -2093,7 +2093,8 @@ async function loadProfile(handle){
 }
 async function loadPosts(){
   profilePosts = [];
-  const wall = currentProfile && currentProfile.twitch_login ? currentProfile.twitch_login.toLowerCase() : null;
+  const key = currentProfile && (currentProfile.username || currentProfile.twitch_login);
+  const wall = key ? key.toLowerCase() : null;
   if(!wall) return;
   try{
     const { data } = await sb.from('posts')
@@ -2118,7 +2119,7 @@ function timeAgo(ms){
 function wallHtml(owner){
   const p = currentProfile;
   const gbOpen = !!(p && p.guestbook_open);
-  const myLogin = me ? ((me.login || me.username || '').toLowerCase() || null) : null;
+  const myLogin = me ? ((me.username || me.login || '').toLowerCase() || null) : null;
   let html = `<div class="pf-section-t">Wall</div>`;
   if(owner){
     html += `<div class="gb-toggle">Guestbook posts from others <button class="gb-switch ${gbOpen?'on':'off'}" onclick="toggleGuestbook()">${gbOpen?'Open':'Closed'}</button></div>`;
@@ -2246,7 +2247,7 @@ async function addPost(){
   const btn = document.querySelector('.pf-post-btn');
   if(btn){ btn.disabled = true; btn.textContent = 'Posting…'; }
   try{
-    const wallLogin = currentProfile && currentProfile.twitch_login ? currentProfile.twitch_login : viewingProfile;
+    const wallLogin = (currentProfile && (currentProfile.username || currentProfile.twitch_login)) || viewingProfile;
     const { error } = await sb.rpc('add_wall_post', { p_wall_login: wallLogin, p_body: body });
     if(error){
       const m = (error.message || '').toLowerCase();
