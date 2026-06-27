@@ -437,6 +437,11 @@
   .lp-prov{display:inline-flex; align-items:center; gap:8px; font-weight:700; font-size:14px; padding:10px 18px; border-radius:11px; color:#fff}
   .lp-prov.fb{background:#1877F2; border:1px solid #1877F2}
   .lp-prov.fb:hover{filter:brightness(1.08)}
+  .lp-prov.google{background:#fff; color:#3c4043; border:1px solid #dadce0}
+  .lp-prov.google:hover{background:#f6f8fc}
+  .lp-prov.google .gmark{font-family:Arial,sans-serif; font-weight:800; color:#4285F4; font-size:15px}
+  .lp-prov.discord{background:#5865F2; border:1px solid #5865F2}
+  .lp-prov.discord:hover{filter:brightness(1.08)}
   .lp-prov-soon{font-size:12.5px; color:var(--faint)}
   .lite-welcome{text-align:center; padding:46px 26px; background:var(--surface); border:1px solid var(--border); border-radius:18px}
   .lite-welcome h2{font-family:'Bricolage Grotesque',sans-serif; font-size:24px; margin-bottom:12px}
@@ -489,9 +494,11 @@
       </div>
       <div class="lp-or">or sign in with</div>
       <div class="lp-providers">
-        <button class="lp-prov fb" onclick="connectFacebookLogin()"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M22 12a10 10 0 1 0-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.5h-1.3c-1.2 0-1.6.8-1.6 1.6V12h2.8l-.4 2.9h-2.3v7A10 10 0 0 0 22 12z"/></svg> Facebook</button>
-        <span class="lp-prov-soon">More options (Google, Discord, Kick…) coming soon</span>
+        <button class="lp-prov fb" onclick="connectProvider('facebook')"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M22 12a10 10 0 1 0-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.5h-1.3c-1.2 0-1.6.8-1.6 1.6V12h2.8l-.4 2.9h-2.3v7A10 10 0 0 0 22 12z"/></svg> Facebook</button>
+        <button class="lp-prov google" onclick="connectProvider('google')"><span class="gmark">G</span> Google</button>
+        <button class="lp-prov discord" onclick="connectProvider('discord')"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.3.5a18 18 0 0 1 4 1.4 16.6 16.6 0 0 0-14.2 0 18 18 0 0 1 4-1.4L8.6 3a19.8 19.8 0 0 0-4.9 1.4C1.6 8.4 1 12.3 1.3 16.2a20 20 0 0 0 6 3l.5-.7c-1-.3-1.9-.8-2.7-1.3l.6-.5a14.3 14.3 0 0 0 12.5 0l.6.5c-.8.5-1.7 1-2.7 1.3l.5.7a20 20 0 0 0 6-3c.4-4.6-.6-8.5-2.6-11.8zM8.5 14c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2zm7 0c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2z"/></svg> Discord</button>
       </div>
+      <div class="lp-prov-soon">Kick coming soon · Twitch unlocks live discovery</div>
       <div class="lp-trust">Free forever · Twitch unlocks live discovery · other logins get a profile you can grow</div>
     </section>
 
@@ -840,12 +847,15 @@ async function connectTwitch(){
   if(error) showBanner('warn', "Couldn't start Twitch sign-in: " + error.message);
 }
 async function connectFacebookLogin(){
-  showBanner('info', 'Opening Facebook sign-in…');
-  const { error } = await sb.auth.signInWithOAuth({
-    provider: 'facebook',
-    options: { redirectTo: REDIRECT_URI }
-  });
-  if(error) showBanner('warn', "Couldn't start Facebook sign-in: " + error.message);
+  return connectProvider('facebook');
+}
+async function connectProvider(p){
+  showBanner('info', 'Opening sign-in…');
+  const { error } = await sb.auth.signInWithOAuth({ provider: p, options: { redirectTo: REDIRECT_URI } });
+  if(error) showBanner('warn', "Couldn't start sign-in: " + error.message);
+}
+function provName(p){
+  return ({ facebook:'Facebook', google:'Google', discord:'Discord', twitch:'Twitch' })[p] || '';
 }
 
 function saveToken(){ try{ localStorage.setItem('lineup_tw_provider', token); }catch(e){} }
@@ -910,7 +920,7 @@ async function loadPointsLite(){
 }
 function renderLiteHub(twitchLinked){
   const nm = document.querySelector('.you-name'); if(nm) nm.textContent = me.display_name || 'you';
-  const st = document.getElementById('youStatus'); if(st) st.textContent = me.provider === 'facebook' ? 'signed in · Facebook' : 'signed in';
+  const st = document.getElementById('youStatus'); if(st) st.textContent = provName(me.provider) ? ('signed in · ' + provName(me.provider)) : 'signed in';
   const ava = document.querySelector('.you .ava');
   if(ava && me.profile_image_url){ ava.style.backgroundImage = `url('${me.profile_image_url}')`; ava.style.backgroundSize = 'cover'; }
   const grid = document.getElementById('grid');
@@ -918,7 +928,7 @@ function renderLiteHub(twitchLinked){
     <h2>Welcome to Lineup</h2>
     <p>${twitchLinked
         ? "You're signed in. To load your live follows and discovery, connect your Twitch — or just set up your page and explore for now."
-        : "You're signed in" + (me.provider === 'facebook' ? ' with Facebook' : '') + ". Live-stream discovery runs on Twitch, Kick, and YouTube — you can connect one of those later to show when you're live. For now, set up your page, leave messages on creators' walls, and climb the leaderboard."}</p>
+        : "You're signed in" + (provName(me.provider) ? ' with ' + provName(me.provider) : '') + ". Live-stream discovery runs on Twitch, Kick, and YouTube — you can connect one of those later to show when you're live. For now, set up your page, leave messages on creators' walls, and climb the leaderboard."}</p>
     <div class="lite-actions">
       ${twitchLinked ? `<button class="lite-cta tw" onclick="connectTwitch()"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M4 3 3 6v12h4v3h3l3-3h4l5-5V3H4zm16 9-3 3h-4l-3 3v-3H6V5h14v7zM15 8h-2v5h2V8zm-5 0H8v5h2V8z"/></svg> Connect Twitch</button>` : ''}
       <button class="lite-cta" onclick="if(me)openProfile(me.username || '')">Set up my page →</button>
