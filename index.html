@@ -362,6 +362,18 @@
   .pf-post-btn:hover{filter:brightness(1.07)} .pf-post-btn:disabled{opacity:.5}
   .pf-posts{display:flex; flex-direction:column; gap:10px; margin-top:12px}
   .pf-post{background:var(--surface); border:1px solid var(--border); border-radius:13px; padding:13px 15px}
+  .pf-post-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:6px}
+  .pf-post-who{font-size:13.5px; font-weight:700; color:var(--text)}
+  .pf-post-who:hover{color:var(--paccent)}
+  .pf-post-time{font-size:11.5px; color:var(--faint)}
+  .pf-post-actions{display:flex; gap:6px; justify-content:flex-end; margin-top:8px}
+  .pf-paction{font-size:12px; color:var(--faint); padding:3px 8px; border-radius:7px; line-height:1; border:1px solid transparent}
+  .pf-paction:hover{color:var(--text); border-color:var(--border-2)}
+  .pf-paction.del:hover{color:#FF5C5C; border-color:rgba(255,92,92,.4)}
+  .gb-toggle{display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:13px; color:var(--dim); background:var(--surface); border:1px solid var(--border); border-radius:11px; padding:10px 13px; margin-bottom:11px}
+  .gb-switch{font-weight:700; font-size:12px; padding:5px 13px; border-radius:999px}
+  .gb-switch.on{background:rgba(61,220,151,.15); color:var(--good); border:1px solid rgba(61,220,151,.4)}
+  .gb-switch.off{background:var(--surface-2); color:var(--faint); border:1px solid var(--border)}
   .pf-post-body{font-size:14.5px; line-height:1.55; white-space:pre-wrap; word-break:break-word}
   .pf-post-body a{color:var(--paccent)}
   .pf-post-meta{display:flex; align-items:center; justify-content:space-between; margin-top:8px; font-size:11.5px; color:var(--faint)}
@@ -1851,7 +1863,7 @@ function openProfile(login){ showProfile(login, true); }
 async function loadProfile(login){
   try{
     const { data } = await sb.from('profiles')
-      .select('twitch_login, display_name, avatar, points, bio, accent, links, music_url, bg_url, layout, fb_verified, fb_name, card_url, music_list')
+      .select('twitch_login, display_name, avatar, points, bio, accent, links, music_url, bg_url, layout, fb_verified, fb_name, card_url, music_list, guestbook_open')
       .ilike('twitch_login', login).limit(1);
     currentProfile = (data && data[0]) ? data[0] : null;
   }catch(e){ currentProfile = null; }
@@ -1862,8 +1874,9 @@ async function loadPosts(login){
   profilePosts = [];
   try{
     const { data } = await sb.from('posts')
-      .select('id, body, created_at')
-      .eq('author_login', login.toLowerCase())
+      .select('id, body, created_at, author_login, author_name')
+      .eq('wall_login', login.toLowerCase())
+      .eq('hidden', false)
       .order('created_at', { ascending:false }).limit(50);
     profilePosts = data || [];
   }catch(e){}
@@ -1880,22 +1893,57 @@ function timeAgo(ms){
   return new Date(ms).toLocaleDateString();
 }
 function wallHtml(owner){
+  const p = currentProfile;
+  const gbOpen = !!(p && p.guestbook_open);
+  const myLogin = me ? me.login.toLowerCase() : null;
   let html = `<div class="pf-section-t">Wall</div>`;
   if(owner){
+    html += `<div class="gb-toggle">Guestbook posts from others <button class="gb-switch ${gbOpen?'on':'off'}" onclick="toggleGuestbook()">${gbOpen?'Open':'Closed'}</button></div>`;
+  }
+  const canPost = me && (owner || gbOpen);
+  if(canPost){
     html += `<div class="pf-postbox">
-      <textarea id="pfPost" maxlength="500" placeholder="Post an update — going live soon, new VOD, a thank-you to your raiders…"></textarea>
+      <textarea id="pfPost" maxlength="500" placeholder="${owner ? 'Post an update — going live soon, new VOD, a thank-you…' : 'Leave a message on this wall…'}"></textarea>
       <button class="pf-post-btn" onclick="addPost()">Post</button>
     </div>`;
+  } else if(me && !owner && !gbOpen){
+    html += `<div class="pf-noposts">This wall's guestbook is closed.</div>`;
+  } else if(!me){
+    html += `<div class="pf-noposts">Connect Twitch to leave a message.</div>`;
   }
   if(!profilePosts.length){
-    html += `<div class="pf-noposts">${owner ? 'No posts yet — share something above.' : 'No posts yet.'}</div>`;
+    html += `<div class="pf-noposts">No posts yet${owner ? ' — share something above.' : '.'}</div>`;
   } else {
     html += '<div class="pf-posts">' + profilePosts.map(po=>{
-      const del = owner ? `<button class="pf-del" onclick="deletePost(${po.id})" title="Delete post">✕</button>` : '';
-      return `<div class="pf-post"><div class="pf-post-body">${linkify(po.body)}</div><div class="pf-post-meta"><span>${timeAgo(new Date(po.created_at).getTime())}</span>${del}</div></div>`;
+      const who = esc(po.author_name || po.author_login || 'someone');
+      const isAuthor = myLogin && po.author_login === myLogin;
+      const canDelete = owner || isAuthor;
+      const canBlock = owner && !isAuthor;
+      const canReport = me && !isAuthor;
+      let actions = '';
+      if(canReport) actions += `<button class="pf-paction" onclick="reportPost(${po.id})" title="Report this post">⚑</button>`;
+      if(canBlock) actions += `<button class="pf-paction" onclick="blockPoster('${po.author_login}')" title="Block this user from your wall">⊘</button>`;
+      if(canDelete) actions += `<button class="pf-paction del" onclick="deletePost(${po.id})" title="Delete post">✕</button>`;
+      const whoClick = po.author_login ? `onclick="openProfile('${po.author_login}')" style="cursor:pointer"` : '';
+      return `<div class="pf-post">
+        <div class="pf-post-head"><span class="pf-post-who" ${whoClick}>${who}</span><span class="pf-post-time">${timeAgo(new Date(po.created_at).getTime())}</span></div>
+        <div class="pf-post-body">${linkify(po.body)}</div>
+        ${actions ? `<div class="pf-post-actions">${actions}</div>` : ''}
+      </div>`;
     }).join('') + '</div>';
   }
   return html;
+}
+async function toggleGuestbook(){
+  if(!currentProfile) return;
+  const next = !currentProfile.guestbook_open;
+  try{
+    const { error } = await sb.rpc('set_guestbook', { p_open: next });
+    if(error) throw error;
+    currentProfile.guestbook_open = next;
+    renderProfile();
+    toast(next ? 'Guestbook opened to others' : 'Guestbook closed', next ? '🔓' : '🔒');
+  }catch(e){ toast("Couldn't update guestbook", '✕'); }
 }
 async function addPost(){
   const ta = document.getElementById('pfPost'); const body = (ta.value || '').trim();
@@ -1903,11 +1951,13 @@ async function addPost(){
   const btn = document.querySelector('.pf-post-btn');
   if(btn){ btn.disabled = true; btn.textContent = 'Posting…'; }
   try{
-    const { error } = await sb.rpc('add_post', { p_body: body });
+    const { error } = await sb.rpc('add_wall_post', { p_wall_login: viewingProfile, p_body: body });
     if(error){
       const m = (error.message || '').toLowerCase();
       if(m.includes('too fast')) toast('Give it a few seconds between posts', '⏳');
       else if(m.includes('daily limit')) toast("That's enough posts for today", '✋');
+      else if(m.includes('guestbook closed')) toast('This guestbook is closed', '🔒');
+      else if(m.includes('blocked')) toast("You can't post on this wall", '⛔');
       else toast("Couldn't post — try again", '✕');
       if(btn){ btn.disabled = false; btn.textContent = 'Post'; }
       return;
@@ -1917,6 +1967,23 @@ async function addPost(){
     renderProfile();
     toast('Posted', '✓');
   }catch(e){ if(btn){ btn.disabled = false; btn.textContent = 'Post'; } toast("Couldn't post — try again", '✕'); }
+}
+async function reportPost(id){
+  try{
+    const { error } = await sb.rpc('report_post', { p_post_id: id });
+    if(error) throw error;
+    toast('Reported — thanks for flagging', '⚑');
+    await loadPosts(viewingProfile); renderProfile();
+  }catch(e){ toast("Couldn't report — try again", '✕'); }
+}
+async function blockPoster(login){
+  if(!confirm('Block ' + login + ' from your wall? Their posts here will be removed and they can\'t post again.')) return;
+  try{
+    const { error } = await sb.rpc('block_from_wall', { p_blocked_login: login });
+    if(error) throw error;
+    await loadPosts(viewingProfile); renderProfile();
+    toast(login + ' blocked from your wall', '⛔');
+  }catch(e){ toast("Couldn't block — try again", '✕'); }
 }
 async function deletePost(id){
   try{
