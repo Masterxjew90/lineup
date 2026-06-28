@@ -442,6 +442,9 @@
   .lp-prov.google .gmark{font-family:Arial,sans-serif; font-weight:800; color:#4285F4; font-size:15px}
   .lp-prov.discord{background:#5865F2; border:1px solid #5865F2}
   .lp-prov.discord:hover{filter:brightness(1.08)}
+  .lp-prov.kick{background:#53FC18; color:#0b0b0b; border:1px solid #53FC18}
+  .lp-prov.kick:hover{filter:brightness(1.06)}
+  .lp-prov.kick .kmark{font-family:Arial,sans-serif; font-weight:900; font-size:15px}
   .lp-prov-soon{font-size:12.5px; color:var(--faint)}
   .lite-welcome{text-align:center; padding:46px 26px; background:var(--surface); border:1px solid var(--border); border-radius:18px}
   .lite-welcome h2{font-family:'Bricolage Grotesque',sans-serif; font-size:24px; margin-bottom:12px}
@@ -497,8 +500,9 @@
         <button class="lp-prov fb" onclick="connectProvider('facebook')"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M22 12a10 10 0 1 0-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.5h-1.3c-1.2 0-1.6.8-1.6 1.6V12h2.8l-.4 2.9h-2.3v7A10 10 0 0 0 22 12z"/></svg> Facebook</button>
         <button class="lp-prov google" onclick="connectProvider('google')"><span class="gmark">G</span> Google</button>
         <button class="lp-prov discord" onclick="connectProvider('discord')"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.3.5a18 18 0 0 1 4 1.4 16.6 16.6 0 0 0-14.2 0 18 18 0 0 1 4-1.4L8.6 3a19.8 19.8 0 0 0-4.9 1.4C1.6 8.4 1 12.3 1.3 16.2a20 20 0 0 0 6 3l.5-.7c-1-.3-1.9-.8-2.7-1.3l.6-.5a14.3 14.3 0 0 0 12.5 0l.6.5c-.8.5-1.7 1-2.7 1.3l.5.7a20 20 0 0 0 6-3c.4-4.6-.6-8.5-2.6-11.8zM8.5 14c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2zm7 0c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2z"/></svg> Discord</button>
+        <button class="lp-prov kick" onclick="connectProvider('custom:kick')"><span class="kmark">K</span> Kick</button>
       </div>
-      <div class="lp-prov-soon">Kick coming soon · Twitch unlocks live discovery</div>
+      <div class="lp-prov-soon">Twitch unlocks live discovery · link it anytime from your hub</div>
       <div class="lp-trust">Free forever · Twitch unlocks live discovery · other logins get a profile you can grow</div>
     </section>
 
