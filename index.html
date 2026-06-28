@@ -373,6 +373,10 @@
   .pf-link{display:flex; align-items:center; gap:10px; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px 14px; font-weight:600; font-size:14px; color:var(--text); transition:border-color .12s, transform .12s}
   .pf-link:hover{border-color:var(--paccent); transform:translateY(-1px)}
   .pf-link .pf-lk-dot{width:9px; height:9px; border-radius:50%; flex-shrink:0}
+  .pf-report-btn{margin-top:14px; background:none; border:1px solid var(--border); color:var(--dim); font-size:12px; font-weight:600; padding:7px 13px; border-radius:9px; cursor:pointer}
+  .pf-report-btn:hover{border-color:var(--live); color:var(--live)}
+  .admin-sec-t{font-size:12px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:var(--dim); margin:16px 0 8px}
+  .admin-sec-t:first-of-type{margin-top:4px}
   .pf-link-live{border-color:var(--live)!important; box-shadow:0 0 0 1px var(--live) inset}
   .pf-live-tag{margin-left:auto; display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:800; letter-spacing:.5px; color:#fff; background:var(--live); padding:3px 8px; border-radius:6px}
   .pf-live-dot{width:5px; height:5px; border-radius:50%; background:#fff; animation:kickpulse 1.4s infinite}
@@ -664,7 +668,7 @@
           </div>
         </div>
         <button class="mypage-btn" id="myPageBtn" style="display:none" onclick="if(me)openProfile(me.username || me.login)">View &amp; edit my page →</button>
-        <button class="mypage-btn admin-open-btn" id="adminBtn" style="display:none" onclick="openAdmin()">⚑ Review reported posts</button>
+        <button class="mypage-btn admin-open-btn" id="adminBtn" style="display:none" onclick="openAdmin()">⚑ Review reports</button>
       </div>
 
       <div class="panel" id="boostPanel" style="display:none">
@@ -733,7 +737,10 @@
 
 <div class="modal-bg" id="adminModal" onclick="if(event.target===this)closeAdmin()">
   <div class="modal admin-modal">
-    <div class="admin-head"><b>Reported posts</b><button class="music-close" style="position:static" onclick="closeAdmin()" aria-label="Close">✕</button></div>
+    <div class="admin-head"><b>Moderation</b><button class="music-close" style="position:static" onclick="closeAdmin()" aria-label="Close">✕</button></div>
+    <div class="admin-sec-t">Reported pages</div>
+    <div id="adminProfList" class="admin-list"></div>
+    <div class="admin-sec-t">Reported posts</div>
     <div id="adminList" class="admin-list"></div>
   </div>
 </div>
@@ -1067,6 +1074,7 @@ async function checkUsername(){
   const inp = document.getElementById('unameInput'), msg = document.getElementById('unameMsg'), btn = document.getElementById('unameSave');
   const v = (inp.value || '').toLowerCase().trim();
   if(!/^[a-z0-9_]{3,25}$/.test(v)){ msg.textContent = '3–25 letters, numbers, or _'; msg.className = 'fb-count bad'; btn.disabled = true; return; }
+  if(containsBlocked(v)){ msg.textContent = 'Please choose a different username'; msg.className = 'fb-count bad'; btn.disabled = true; return; }
   msg.textContent = 'Checking…'; msg.className = 'fb-count';
   try{
     const { data } = await sb.from('profiles').select('id').ilike('username', v).limit(1);
@@ -1078,6 +1086,7 @@ async function checkUsername(){
 async function claimUsername(){
   const inp = document.getElementById('unameInput'), btn = document.getElementById('unameSave'), msg = document.getElementById('unameMsg');
   const v = (inp.value || '').toLowerCase().trim();
+  if(containsBlocked(v)){ msg.className = 'fb-count bad'; msg.textContent = 'Please choose a different username'; return; }
   btn.disabled = true; btn.textContent = 'Claiming…';
   try{
     const { data, error } = await sb.rpc('set_username', { p_username: v });
@@ -2019,6 +2028,7 @@ async function loadLineup(){
     const { data } = await sb.from('profiles')
       .select('twitch_login, display_name, avatar, points, listed_at, feat_remaining_secs, feat_running_since, username, kick_slug')
       .not('listed_at', 'is', null)
+      .eq('hidden', false)
       .order('points', { ascending:false })
       .limit(100);
     members = (data || []).filter(m => m.twitch_login || m.kick_slug);
@@ -2145,7 +2155,30 @@ function layoutMove(k, dir){
 function layoutToggle(k){
   const x = editLayout.find(y => y.k === k); if(x) x.show = !x.show;
 }
-function safeBgUrl(u){ u = (u||'').trim(); if(!/^https?:\/\//i.test(u)) return null; if(/["'()\s<>]/.test(u)) return null; return u; }
+// Only allow images from reputable hosts (these have their own moderation/ToS).
+// This keeps arbitrary or non-image URLs from rendering on public profiles.
+const IMG_HOSTS = [
+  'giphy.com','media.giphy.com','i.giphy.com',
+  'tenor.com','media.tenor.com','c.tenor.com',
+  'imgur.com','i.imgur.com',
+  'i.redd.it','pbs.twimg.com',
+  'cdn.discordapp.com','media.discordapp.net',
+  'raw.githubusercontent.com','images.unsplash.com',
+  'i.ibb.co','i.postimg.cc','postimg.cc'
+];
+function imgHostAllowed(host){
+  host = (host || '').toLowerCase();
+  return IMG_HOSTS.some(d => host === d || host.endsWith('.' + d));
+}
+function safeBgUrl(u){
+  u = (u || '').trim();
+  if(!/^https:\/\//i.test(u)) return null;          // https only
+  if(/["'()\s<>]/.test(u)) return null;             // no CSS-breaking / injection chars
+  let host;
+  try{ host = new URL(u).hostname; }catch(e){ return null; }
+  if(!imgHostAllowed(host)) return null;            // trusted hosts only
+  return u;
+}
 // turn a Giphy/Tenor page link into a direct image link so it actually renders
 function normalizeMediaUrl(u){
   u = (u||'').trim(); if(!u) return '';
@@ -2196,6 +2229,23 @@ async function verifyFb(){
   if(viewingProfile && me && viewingProfile === (me.username || me.login || '').toLowerCase()) await loadProfile(viewingProfile);
 }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// ---- text safety filter (blocks slurs / extreme terms on public fields) ----
+// Editable blocklist. Matching ignores spacing/punctuation and repeated letters
+// so simple evasions (s p a c e d or stretcheeed) are still caught.
+const BLOCKED_TERMS = [
+  'nigger','nigga','faggot','fag','retard','tranny','kike','spic','chink',
+  'coon','wetback','gook','beaner','dyke','paki','raghead','cunt',
+  'rape','rapist','childporn','cp','pedo','pedophile','molest','beastiality','bestiality'
+];
+function normalizeForFilter(s){
+  return (s || '').toLowerCase()
+    .replace(/[^a-z0-9]/g, '')      // strip spaces & punctuation
+    .replace(/(.)\1{2,}/g, '$1$1'); // collapse 3+ repeats
+}
+function containsBlocked(s){
+  const n = normalizeForFilter(s);
+  return BLOCKED_TERMS.some(w => n.includes(w));
+}
 function safeUrl(u){ u = (u||'').trim(); return /^https?:\/\//i.test(u) ? u : null; }
 const LINK_DEFS = [
   {key:'youtube', label:'YouTube', color:'#FF0000'},
@@ -2232,7 +2282,7 @@ function pid(x){ return x && (x.username || x.twitch_login) || ''; }
 function isMe(p){ return !!(me && p && ((me.username && p.username && me.username.toLowerCase() === p.username.toLowerCase()) || (me.login && p.twitch_login && me.login.toLowerCase() === p.twitch_login.toLowerCase()))); }
 async function loadProfile(handle){
   handle = (handle || '').toLowerCase();
-  const cols = 'twitch_login, display_name, avatar, points, bio, accent, links, music_url, bg_url, layout, fb_verified, fb_name, card_url, music_list, guestbook_open, username, verified_providers, kick_slug';
+  const cols = 'twitch_login, display_name, avatar, points, bio, accent, links, music_url, bg_url, layout, fb_verified, fb_name, card_url, music_list, guestbook_open, username, verified_providers, kick_slug, hidden';
   try{
     let { data } = await sb.from('profiles').select(cols).ilike('username', handle).limit(1);
     if(!data || !data.length){ const r2 = await sb.from('profiles').select(cols).ilike('twitch_login', handle).limit(1); data = r2.data; }
@@ -2314,6 +2364,7 @@ async function openAdmin(){
   if(!isAdminUser()) return;
   document.getElementById('adminModal').style.display = 'flex';
   lockScroll(true);
+  await loadReportedProfiles();
   await loadReported();
 }
 function closeAdmin(){
@@ -2394,6 +2445,7 @@ async function toggleGuestbook(){
 async function addPost(){
   const ta = document.getElementById('pfPost'); const body = (ta.value || '').trim();
   if(!body) return;
+  if(containsBlocked(body)){ toast('Please keep it civil — that post contains blocked language.', '✕'); return; }
   const btn = document.querySelector('.pf-post-btn');
   if(btn){ btn.disabled = true; btn.textContent = 'Posting…'; }
   try{
@@ -2413,6 +2465,67 @@ async function addPost(){
     refreshWall();   // updates only the wall, so music keeps playing
     toast('Posted', '✓');
   }catch(e){ if(btn){ btn.disabled = false; btn.textContent = 'Post'; } toast("Couldn't post — try again", '✕'); }
+}
+async function reportProfile(username){
+  if(!me){ toast('Sign in to report a page', 'ℹ'); return; }
+  if(!username) return;
+  if((me.username||'').toLowerCase() === username){ toast("You can't report your own page", 'ℹ'); return; }
+  if(!confirm('Report this page for review by a moderator?')) return;
+  try{
+    const { error } = await sb.rpc('report_profile', { p_username: username });
+    if(error){
+      const m = (error.message||'').toLowerCase();
+      if(m.includes('yourself')) toast("You can't report your own page", 'ℹ');
+      else toast("Couldn't report — try again", '✕');
+      return;
+    }
+    toast('Thanks — a moderator will review this page.', '⚑');
+  }catch(e){ toast("Couldn't report — try again", '✕'); }
+}
+async function loadReportedProfiles(){
+  const list = document.getElementById('adminProfList');
+  if(!list) return;
+  list.innerHTML = '<div class="admin-empty">Loading…</div>';
+  try{
+    const { data, error } = await sb.rpc('admin_reported_profiles');
+    if(error) throw error;
+    if(!data || !data.length){ list.innerHTML = '<div class="admin-empty">No reported pages — all clear.</div>'; return; }
+    list.innerHTML = data.map(p=>{
+      const u = esc(p.username || '');
+      const hasImg = p.bg_url || p.card_url;
+      return `<div class="admin-row" id="profrow-${u}">
+        <div class="admin-meta"><span class="admin-who" onclick="closeAdmin();openProfile('${u}')">@${u}</span> · ${esc(p.display_name||'')} · ⚑ ${p.reports} report${p.reports===1?'':'s'}${p.hidden?' · <b class="admin-hid">hidden</b>':''}</div>
+        <div class="admin-body">${p.bio ? esc(p.bio) : '<i>no bio</i>'}${hasImg ? '<br><span class="admin-on">has custom image(s)</span>' : ''}</div>
+        <div class="admin-foot"><span class="admin-acts">
+          <button class="admin-approve" onclick="adminDismissProfile('${u}')">Dismiss</button>
+          <button class="admin-del" onclick="adminClearProfile('${u}')">Wipe content</button>
+          <button class="admin-del" onclick="adminHideProfile('${u}')">Hide page</button>
+        </span></div>
+      </div>`;
+    }).join('');
+  }catch(e){ list.innerHTML = '<div class="admin-empty">Couldn\'t load reported pages.</div>'; }
+}
+function profRowGone(u){
+  const row = document.getElementById('profrow-' + u); if(row) row.remove();
+  const list = document.getElementById('adminProfList');
+  if(list && !list.querySelector('.admin-row')) list.innerHTML = '<div class="admin-empty">No reported pages — all clear.</div>';
+}
+async function adminDismissProfile(u){
+  try{ const { error } = await sb.rpc('admin_dismiss_profile', { p_username: u }); if(error) throw error;
+    profRowGone(u); toast('Dismissed — page kept', '✓');
+  }catch(e){ toast("Couldn't dismiss — try again", '✕'); }
+}
+async function adminClearProfile(u){
+  if(!confirm('Wipe this page\'s bio, images and music? The account stays.')) return;
+  try{ const { error } = await sb.rpc('admin_clear_profile', { p_username: u }); if(error) throw error;
+    profRowGone(u); toast('Content wiped', '✓');
+  }catch(e){ toast("Couldn't wipe — try again", '✕'); }
+}
+async function adminHideProfile(u){
+  if(!confirm('Hide this page entirely and wipe its content?')) return;
+  try{ const { error } = await sb.rpc('admin_hide_profile', { p_username: u }); if(error) throw error;
+    profRowGone(u); toast('Page hidden', '✓');
+  }catch(e){ toast("Couldn't hide — try again", '✕'); }
 }
 async function reportPost(id){
   try{
@@ -2471,6 +2584,7 @@ function renderProfile(){
   const p = currentProfile;
   if(p === undefined){ applyBg(''); c.innerHTML = `<div class="pf-empty">Loading…</div>`; return; }
   if(p === null){ applyBg(''); c.innerHTML = `<div class="pf-empty"><b>No page here yet</b>That member hasn't set up a Lineup page.</div>`; return; }
+  if(p.hidden && !isMe(p) && !isAdminUser()){ applyBg(''); c.innerHTML = `<div class="pf-empty"><b>This page is unavailable</b>This Lineup page has been hidden.</div>`; return; }
   const accent = (p.accent && /^#[0-9A-Fa-f]{6}$/.test(p.accent)) ? p.accent : '#FF5C39';
   document.getElementById('profile').style.setProperty('--paccent', accent);
   applyBg(p.bg_url);
@@ -2550,7 +2664,7 @@ function renderProfile(){
       <div class="pf-login">@${esc(p.username || p.twitch_login)}</div>
       ${verifiedBadges(p)}
       <div class="pf-stats"><div class="pf-stat"><b>${p.points||0}</b><span>points</span></div></div>
-      ${owner ? `<div><button class="pf-edit-btn" onclick="editingProfile=true; editLayout=null; renderProfile();"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg> Edit my page</button></div>` : ''}
+      ${owner ? `<div><button class="pf-edit-btn" onclick="editingProfile=true; editLayout=null; renderProfile();"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg> Edit my page</button></div>` : (me ? `<div><button class="pf-report-btn" onclick="reportProfile('${esc((p.username||p.twitch_login||'').toLowerCase())}')">⚑ Report this page</button></div>` : '')}
     </div>
     ${order}`;
   updateProfileLive(p);
@@ -2591,6 +2705,9 @@ async function saveProfilePage(){
   const music = musicList[0] || '';
   const bg = normalizeMediaUrl(document.getElementById('pfBg').value.trim());
   const card = normalizeMediaUrl(document.getElementById('pfCard').value.trim());
+  if(containsBlocked(bio)){ toast("Please remove offensive language from your bio.", '✕'); return; }
+  if(bg && !safeBgUrl(bg)){ toast("Background image must be a direct https link from a supported host (Giphy, Imgur, Tenor, Discord, etc.).", '✕'); return; }
+  if(card && !safeBgUrl(card)){ toast("Card image must be a direct https link from a supported host (Giphy, Imgur, Tenor, Discord, etc.).", '✕'); return; }
   const layout = editLayout || normLayout(currentProfile.layout);
   const links = {};
   LINK_DEFS.forEach(d=>{ const el = document.getElementById('pf-' + d.key); if(el && el.value.trim()) links[d.key] = el.value.trim(); });
@@ -2614,6 +2731,7 @@ async function renderLeaderboard(){
   try{
     const { data } = await sb.from('profiles')
       .select('display_name, avatar, points, twitch_login, username')
+      .eq('hidden', false)
       .order('points', { ascending: false })
       .limit(8);
     rows = data || [];
