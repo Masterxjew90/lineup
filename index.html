@@ -668,7 +668,7 @@
       </div>
 
       <div class="panel" id="boostPanel" style="display:none">
-        <h3>Get featured <span class="collab-amt">3 pts / hr</span></h3>
+        <h3>Get featured <span class="collab-amt">100 pts / hr</span></h3>
         <div id="boostBody"></div>
       </div>
 
@@ -1286,8 +1286,13 @@ async function loadMyState(){
   state.supported = {}; state.feedback = {};
   const since = new Date(Date.now() - COOLDOWN_MS).toISOString();
   try{
-    const { data: sup } = await sb.from('supports').select('target_login, created_at').gt('created_at', since);
-    (sup || []).forEach(r => { const t = new Date(r.created_at).getTime(); if(!state.supported[r.target_login] || t > state.supported[r.target_login]) state.supported[r.target_login] = t; });
+    const { data: sup } = await sb.from('supports').select('target_login, created_at, cooldown_secs').gt('created_at', since);
+    (sup || []).forEach(r => {
+      const t = new Date(r.created_at).getTime();
+      const cd = (r.cooldown_secs || 21600) * 1000;
+      const cur = state.supported[r.target_login];
+      if(!cur || t > cur.at) state.supported[r.target_login] = { at: t, cd };
+    });
   }catch(e){}
   try{
     const { data: fb } = await sb.from('feedback').select('target_login, created_at').gt('created_at', since);
@@ -1545,10 +1550,18 @@ const DWELL_MS = 11 * 60000;        // must keep the page open ~11 min (1 for ad
 const COOLDOWN_MS = 6 * 3600000;    // can earn from the same streamer again after 6 hours
 let pending = {};                   // handle -> {startedAt, timer, item}
 
+// cooldown length depends on the stream's size — smaller streams can be supported again sooner
+function watchCooldownMs(viewers, featured){
+  if(featured) return 15 * 60000;              // featured: 15 min
+  if(viewers == null) return 6 * 3600000;      // unknown: 6 h
+  if(viewers === 0) return 1 * 3600000;        // 0 viewers: 1 h
+  if(viewers <= 10) return 3 * 3600000;        // 1–10: 3 h
+  return 6 * 3600000;                          // 11+: 6 h
+}
 function supportState(handle){
   if(pending[handle]) return 'pending';
   const e = state.supported[handle];
-  if(e && (Date.now() - e) < COOLDOWN_MS) return 'cooldown';
+  if(e && (Date.now() - e.at) < e.cd) return 'cooldown';
   return 'open';
 }
 function feedbackState(handle){
@@ -1562,10 +1575,10 @@ function discoveryState(handle){
 }
 function cooldownLeft(handle){
   const e = state.supported[handle]; if(!e) return '';
-  const r = COOLDOWN_MS - (Date.now() - e);
+  const r = e.cd - (Date.now() - e.at);
   if(r <= 0) return '';
-  const h = Math.ceil(r / 3600000);
-  return h <= 1 ? 'soon' : h + 'h left';
+  if(r < 3600000) return Math.ceil(r/60000) + 'm left';
+  return Math.ceil(r/3600000) + 'h left';
 }
 function fmtTime(ms){
   const s = Math.max(0, Math.ceil(ms/1000));
@@ -1727,7 +1740,7 @@ function support(handle){
   startWatch(handle, item);
 }
 function startWatch(handle, item){
-  pending[handle] = { startedAt: Date.now(), item: item ? {handle, name:item.name, url:item.url} : {handle} };
+  pending[handle] = { startedAt: Date.now(), item: item ? {handle, name:item.name, url:item.url, viewers:item.viewers, featured:!!item.featured} : {handle} };
   pending[handle].timer = setInterval(()=>watchTick(handle), 1000);
   persistWatching();
   render();
@@ -1748,14 +1761,17 @@ async function finishWatch(handle){
   persistWatching();
   render();
   try{
-    const { data, error } = await sb.rpc('award_points', { p_kind: 'watch', p_target: handle });
+    const vw = item && item.viewers != null ? item.viewers : null;
+    const ft = !!(item && item.featured);
+    const cdMs = watchCooldownMs(vw, ft);
+    const { data, error } = await sb.rpc('award_points', { p_kind: 'watch', p_target: handle, p_viewers: vw, p_featured: ft });
     if(error){
-      state.supported[handle] = Date.now();  // server says cooldown / already counted
+      if(!state.supported[handle]) state.supported[handle] = { at: Date.now(), cd: cdMs };
       render();
       return;
     }
     state.points = data;
-    state.supported[handle] = Date.now();
+    state.supported[handle] = { at: Date.now(), cd: cdMs };
     updatePointsDisplay();
     renderLeaderboard();
     toast(`You showed up for <b>${item ? (item.name||handle) : handle}</b>`, '+10');
@@ -1932,8 +1948,8 @@ function renderBoost(){
   if(!me){ panel.style.display = 'none'; return; }
   panel.style.display = 'block';
   const rem = featRemainingNow();
-  const afford = state.points >= 3;
-  const addBtn = `<button class="boost-btn" ${afford?'':'disabled'} onclick="featureMe(1)">${rem>0 ? 'Add +1 hr · 3 pts' : 'Feature me · 1 hr (3 pts)'}</button>`;
+  const afford = state.points >= 100;
+  const addBtn = `<button class="boost-btn" ${afford?'':'disabled'} onclick="featureMe(1)">${rem>0 ? 'Add +1 hr · 100 pts' : 'Feature me · 1 hr (100 pts)'}</button>`;
   let html = '';
   if(rem > 0 && state.featRunning){
     html += `<div class="boost-active"><span class="boost-dot"></span>Featured · <b id="boostCountdown">${fmtClock(rem*1000)}</b> left</div>` + addBtn;
