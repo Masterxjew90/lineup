@@ -374,6 +374,12 @@
   .pf-link:hover{border-color:var(--paccent); transform:translateY(-1px)}
   .pf-link .pf-lk-dot{width:9px; height:9px; border-radius:50%; flex-shrink:0}
   .pf-report-btn{margin-top:14px; background:none; border:1px solid var(--border); color:var(--dim); font-size:12px; font-weight:600; padding:7px 13px; border-radius:9px; cursor:pointer}
+  .pf-tips-wrap{margin-top:16px}
+  .pf-tips-t{font-size:12px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:var(--dim); margin-bottom:9px}
+  .pf-tips{display:flex; flex-wrap:wrap; gap:8px; justify-content:center}
+  .pf-tip{display:inline-flex; align-items:center; gap:7px; font-size:13.5px; font-weight:700; color:#0b0b0b; background:var(--tc); padding:8px 14px; border-radius:10px; transition:transform .12s, filter .12s}
+  .pf-tip:hover{transform:translateY(-1px); filter:brightness(1.06)}
+  .pf-tip-i{font-size:14px}
   .pf-report-btn:hover{border-color:var(--live); color:var(--live)}
   .admin-sec-t{font-size:12px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:var(--dim); margin:16px 0 8px}
   .admin-sec-t:first-of-type{margin-top:4px}
@@ -2257,6 +2263,44 @@ const LINK_DEFS = [
   {key:'discord', label:'Discord', color:'#5865F2'},
   {key:'website', label:'Website', color:'#A56BFF'}
 ];
+// ---- tip jar: streamers link their own (tips go straight to them) ----
+const TIP_DEFS = [
+  {key:'cashapp', label:'Cash App',     color:'#00D632', icon:'💵', hint:'$cashtag or full link'},
+  {key:'kofi',    label:'Ko-fi',        color:'#FF5E5B', icon:'☕', hint:'username or full link'},
+  {key:'paypal',  label:'PayPal',       color:'#0070BA', icon:'💳', hint:'paypal.me username or link'},
+  {key:'venmo',   label:'Venmo',        color:'#008CFF', icon:'💙', hint:'@username or full link'},
+  {key:'buymeacoffee', label:'Buy Me a Coffee', color:'#FFDD00', icon:'🍩', hint:'username or full link'},
+  {key:'patreon', label:'Patreon',      color:'#FF424D', icon:'🧡', hint:'username or full link'}
+];
+const TIP_HOSTS = ['cash.app','ko-fi.com','paypal.me','paypal.com','venmo.com','buymeacoffee.com','patreon.com','streamelements.com','streamlabs.com'];
+function normalizeTip(key, v){
+  v = (v || '').trim(); if(!v) return '';
+  if(/^https?:\/\//i.test(v)) return v;                  // already a full link
+  const h = v.replace(/^@/, '').replace(/^\$/, '');
+  if(key === 'cashapp') return 'https://cash.app/$' + h;
+  if(key === 'kofi') return 'https://ko-fi.com/' + h;
+  if(key === 'paypal') return 'https://paypal.me/' + h;
+  if(key === 'venmo') return 'https://venmo.com/u/' + h;
+  if(key === 'buymeacoffee') return 'https://buymeacoffee.com/' + h;
+  if(key === 'patreon') return 'https://patreon.com/' + h;
+  return v;
+}
+function safeTipUrl(u){
+  u = (u || '').trim();
+  if(!/^https:\/\//i.test(u)) return null;
+  if(/["'()\s<>]/.test(u)) return null;
+  let host; try{ host = new URL(u).hostname.toLowerCase(); }catch(e){ return null; }
+  return TIP_HOSTS.some(d => host === d || host.endsWith('.' + d)) ? u : null;
+}
+function tipButtons(p){
+  const links = (p.links && typeof p.links === 'object') ? p.links : {};
+  const items = TIP_DEFS.map(d=>{
+    const u = safeTipUrl(normalizeTip(d.key, links[d.key]));
+    if(!u) return '';
+    return `<a class="pf-tip" href="${esc(u)}" target="_blank" rel="noopener" style="--tc:${d.color}"><span class="pf-tip-i">${d.icon}</span>${d.label}</a>`;
+  }).filter(Boolean).join('');
+  return items ? `<div class="pf-tips-wrap"><div class="pf-tips-t">💝 Support me</div><div class="pf-tips">${items}</div></div>` : '';
+}
 function musicEmbed(url){
   const u = (url || '').trim(); if(!u) return '';
   let m = u.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|live\/)|youtu\.be\/)([\w-]{11})/);
@@ -2624,6 +2668,9 @@ function renderProfile(){
       </div>
       <div class="pf-section-t" style="margin-bottom:0">Your links</div>
       ${LINK_DEFS.map(d=>`<label>${d.label}</label><input id="pf-${d.key}" value="${esc(links[d.key] || '')}" placeholder="https://…">`).join('')}
+      <div class="pf-section-t" style="margin-bottom:2px">💝 Tip jar</div>
+      <div class="rail-note" style="margin-bottom:8px">Add your own tip links — supporters pay you directly, Lineup takes nothing.</div>
+      ${TIP_DEFS.map(d=>`<label>${d.label}</label><input id="tip-${d.key}" value="${esc(links[d.key] || '')}" placeholder="${esc(d.hint)}">`).join('')}
       <div class="pf-save">
         <button class="cancel" onclick="editingProfile=false; editLayout=null; renderProfile();">Cancel</button>
         <button class="save" onclick="saveProfilePage()">Save page</button>
@@ -2664,6 +2711,7 @@ function renderProfile(){
       <div class="pf-login">@${esc(p.username || p.twitch_login)}</div>
       ${verifiedBadges(p)}
       <div class="pf-stats"><div class="pf-stat"><b>${p.points||0}</b><span>points</span></div></div>
+      ${tipButtons(p)}
       ${owner ? `<div><button class="pf-edit-btn" onclick="editingProfile=true; editLayout=null; renderProfile();"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg> Edit my page</button></div>` : (me ? `<div><button class="pf-report-btn" onclick="reportProfile('${esc((p.username||p.twitch_login||'').toLowerCase())}')">⚑ Report this page</button></div>` : '')}
     </div>
     ${order}`;
@@ -2711,6 +2759,7 @@ async function saveProfilePage(){
   const layout = editLayout || normLayout(currentProfile.layout);
   const links = {};
   LINK_DEFS.forEach(d=>{ const el = document.getElementById('pf-' + d.key); if(el && el.value.trim()) links[d.key] = el.value.trim(); });
+  TIP_DEFS.forEach(d=>{ const el = document.getElementById('tip-' + d.key); if(el && el.value.trim()) links[d.key] = el.value.trim(); });
   try{
     await sb.rpc('save_page', { p_bio: bio, p_accent: accent, p_links: links, p_music: music, p_bg: bg, p_layout: layout, p_card: card, p_music_list: musicList });
     Object.assign(currentProfile, { bio, accent, links, music_url: music, music_list: musicList, bg_url: bg, layout, card_url: card });
