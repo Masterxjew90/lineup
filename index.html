@@ -2511,6 +2511,7 @@ async function addPost(){
     if(error){
       const m = (error.message || '').toLowerCase();
       if(m.includes('too fast')) toast('Give it a few seconds between posts', '⏳');
+      else if(m.includes('offensive')) toast('Please keep it civil — that post was blocked.', '✕');
       else if(m.includes('daily limit')) toast("That's enough posts for today", '✋');
       else if(m.includes('guestbook closed')) toast('This guestbook is closed', '🔒');
       else if(m.includes('blocked')) toast("You can't post on this wall", '⛔');
@@ -2774,7 +2775,13 @@ async function saveProfilePage(){
   LINK_DEFS.forEach(d=>{ const el = document.getElementById('pf-' + d.key); if(el && el.value.trim()) links[d.key] = el.value.trim(); });
   TIP_DEFS.forEach(d=>{ const el = document.getElementById('tip-' + d.key); if(el && el.value.trim()) links[d.key] = el.value.trim(); });
   try{
-    await sb.rpc('save_page', { p_bio: bio, p_accent: accent, p_links: links, p_music: music, p_bg: bg, p_layout: layout, p_card: card, p_music_list: musicList });
+    const { error } = await sb.rpc('save_page', { p_bio: bio, p_accent: accent, p_links: links, p_music: music, p_bg: bg, p_layout: layout, p_card: card, p_music_list: musicList });
+    if(error){
+      const m = (error.message || '').toLowerCase();
+      if(m.includes('offensive')) toast('Please remove offensive language from your bio.', '✕');
+      else toast("Couldn't save — try again", '✕');
+      return;
+    }
     Object.assign(currentProfile, { bio, accent, links, music_url: music, music_list: musicList, bg_url: bg, layout, card_url: card });
     editingProfile = false; editLayout = null;
     renderProfile();
