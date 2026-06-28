@@ -1378,6 +1378,20 @@ function startAutoRefresh(){
 // ---- Discover: browse the smallest live streamers in a category ----
 const BROWSE_PAGES = 6;   // up to 600 channels; reaches the end of niche categories
 
+function mapKickDiscover(s, gameName){
+  return {
+    handle: s.slug, name: s.slug, id: 'kick:' + s.slug,
+    title: s.title || 'Live on Kick',
+    game: s.category || gameName || 'Live',
+    cat: gameName || s.category || 'Live',
+    platform: 'kick',
+    viewers: s.viewers || 0,
+    lang: (s.language || '').toUpperCase(),
+    mature: !!s.mature, tags: [],
+    thumb: '', avatar: null,
+    url: 'https://kick.com/' + s.slug,
+  };
+}
 async function fetchCategory(gameId, gameName, quiet){
   let streams = [], cursor = '', pages = 0, reachedEnd = false;
   while(pages < BROWSE_PAGES){
@@ -1388,14 +1402,30 @@ async function fetchCategory(gameId, gameName, quiet){
     if(!cursor){ reachedEnd = true; break; }
   }
   browseGameId = gameId; browseLabel = gameName;
-  if(!streams.length){ browseData = []; render(); if(!quiet) showBanner('info', 'Nobody is live in “' + gameName + '” right now. Try another category.'); return; }
-  const avatars = await fetchAvatars(streams.slice().sort((a,b)=>a.viewer_count-b.viewer_count).slice(0,100));
-  browseData = streams.map(s => mapStream(s, avatars));
+  const avatars = streams.length ? await fetchAvatars(streams.slice().sort((a,b)=>a.viewer_count-b.viewer_count).slice(0,100)) : {};
+  let cards = streams.map(s => mapStream(s, avatars));
+  // merge in live Kick streamers in the same category (best-effort, smallest first)
+  let kickN = 0;
+  try{
+    const { data, error } = await sb.functions.invoke('kick-discover', { body: { query: gameName, limit: 60 } });
+    if(!error && data && Array.isArray(data.streams) && data.streams.length){
+      const kc = data.streams.map(s => mapKickDiscover(s, gameName));
+      kickN = kc.length;
+      cards = cards.concat(kc);
+    }
+  }catch(e){}
+  browseData = cards;
   if(!quiet){ state.platform = 'all'; state.cat = 'all'; }
   buildChips(); render();
-  if(!quiet) showBanner('ok', reachedEnd
-    ? 'Found ' + streams.length + ' live in “' + gameName + '” — every one of them, smallest first. The folks at the top of this list need you most.'
-    : 'Showing the smallest of ' + streams.length + '+ live in “' + gameName + '”. For truly tiny streamers, try a more niche category.');
+  if(!cards.length){ if(!quiet) showBanner('info', 'Nobody is live in “' + gameName + '” right now. Try another category.'); return; }
+  if(!quiet){
+    const twN = streams.length;
+    showBanner('ok', kickN
+      ? `Smallest live in “${gameName}” across Twitch and Kick — ${twN} on Twitch, ${kickN} on Kick.`
+      : (reachedEnd
+          ? 'Found ' + twN + ' live in “' + gameName + '” — every one, smallest first. The folks at the top need you most.'
+          : 'Showing the smallest of ' + twN + '+ live in “' + gameName + '”. For tiny streamers, try a more niche category.'));
+  }
 }
 
 async function browseCategory(){
