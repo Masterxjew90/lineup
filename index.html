@@ -157,6 +157,11 @@
   }
   .card:hover{transform:translateY(-3px); border-color:var(--border-2)}
   .thumb{position:relative; aspect-ratio:16/9; display:flex; align-items:flex-end; padding:10px; overflow:hidden}
+  .thumb-mark{
+    position:absolute; top:46%; left:50%; transform:translate(-50%,-50%);
+    font-family:Arial,sans-serif; font-weight:900; font-size:56px; line-height:1;
+    color:rgba(255,255,255,.13); z-index:1; pointer-events:none; user-select:none;
+  }
   .thumb-game{
     font-family:'Bricolage Grotesque',sans-serif; font-weight:700; font-size:15px;
     color:rgba(255,255,255,.92); letter-spacing:-.01em; text-shadow:0 1px 6px rgba(0,0,0,.4); z-index:2;
@@ -1563,8 +1568,15 @@ function showBanner(kind, html){
 // deterministic color from a string -> hue
 function hue(str){let h=0; for(const c of str) h=(h*31+c.charCodeAt(0))%360; return h;}
 function thumbBg(s){
+  if(s.platform === 'kick'){ const v = hue(s.handle) % 14; return `linear-gradient(135deg, hsl(${102+v} 55% ${15+(v%6)}%), hsl(${134+v} 52% ${9+(v%5)}%))`; }
   const h=hue(s.handle); const h2=(h+38)%360;
   return `linear-gradient(135deg, hsl(${h} 42% 26%), hsl(${h2} 48% 17%))`;
+}
+function platMark(pl){
+  if(pl === 'kick') return 'K';
+  if(pl === 'youtube') return '▶';
+  if(pl === 'twitch') return '';
+  return '';
 }
 function avaBg(s){const h=hue(s.handle+'x'); return `linear-gradient(135deg, hsl(${h} 55% 55%), hsl(${(h+50)%360} 60% 42%))`;}
 
@@ -1749,6 +1761,7 @@ function render(){
       : '';
     return `<article class="card${featured ? ' is-featured' : ''}">
       <div class="thumb" style="${thumbStyle}">
+        ${!s.thumb && platMark(s.platform) ? `<span class="thumb-mark"${s.platform==='kick'?' style="color:rgba(83,252,24,.20)"':''}>${platMark(s.platform)}</span>` : ''}
         <span class="live-pill"><span class="ld"></span>LIVE</span>
         <span class="viewers"><span class="vd"></span>${fmt(s.viewers)}</span>
         <span class="thumb-game">${s.game}</span>
