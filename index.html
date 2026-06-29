@@ -139,6 +139,8 @@
   .overlay-steps b{color:var(--text)}
   .overlay-steps ol{margin:7px 0 0; padding-left:20px}
   .overlay-steps li{margin-bottom:4px}
+  .banner-cta{background:var(--twitch); color:#fff; border:none; font-weight:700; font-size:13px; padding:9px 15px; border-radius:9px; cursor:pointer; white-space:nowrap; flex-shrink:0}
+  .banner-cta:hover{filter:brightness(1.08)}
   .banner{display:none; align-items:center; gap:13px; padding:14px 16px; border-radius:var(--r); margin:18px 0 0; font-size:13.5px; line-height:1.5}
   .banner svg{flex-shrink:0}
   .banner.info{background:rgba(165,107,255,.10); border:1px solid rgba(165,107,255,.32); color:#CDB8FF}
@@ -1091,14 +1093,11 @@ async function afterConnectLite(user, twitchLinked){
     renderTools();
     await loadPointsLite();
     renderLeaderboard();
-    renderLiteHub(twitchLinked);
+    await renderLiteHub(twitchLinked);
     renderAuthSlot();
     document.getElementById('myPageBtn').style.display = 'block';
     document.getElementById('adminBtn').style.display = isAdminUser() ? 'block' : 'none';
     if(!me.username) showUsernameModal();
-    showBanner('ok', twitchLinked
-      ? 'Signed in. Connect Twitch to load your live discovery.'
-      : (me.username ? 'Signed in — set up your page and explore.' : 'Welcome! Pick a username to get started.'));
   }catch(e){ showBanner('warn', "Couldn't finish sign-in: " + (e.message || e)); }
 }
 async function syncProfileLite(){
@@ -1111,23 +1110,31 @@ async function loadPointsLite(){
     document.getElementById('youPts').textContent = (p && p.points) || 0;
   }catch(e){}
 }
-function renderLiteHub(twitchLinked){
+async function renderLiteHub(twitchLinked){
   const nm = document.querySelector('.you-name'); if(nm) nm.textContent = me.display_name || 'you';
   const st = document.getElementById('youStatus'); if(st) st.textContent = provName(me.provider) ? ('signed in · ' + provName(me.provider)) : 'signed in';
   const ava = document.querySelector('.you .ava');
   if(ava && me.profile_image_url){ ava.style.backgroundImage = `url('${me.profile_image_url}')`; ava.style.backgroundSize = 'cover'; }
+
+  // welcome / upgrade banner above the feed
+  const banner = document.getElementById('banner');
+  if(banner){
+    banner.className = 'banner ok';
+    banner.style.display = 'flex';
+    banner.innerHTML = `<div style="flex:1; min-width:0">
+        <b>Welcome to Lineup.</b> Small streamers live on Kick are below — watch any of them for real to earn points.
+        ${twitchLinked ? ' Connect Twitch to add Twitch discovery.' : ' Link Twitch to add Twitch streamers and go live yourself.'}
+      </div>
+      <button class="banner-cta" onclick="${twitchLinked ? 'connectTwitch()' : 'linkTwitch()'}">${twitchLinked ? 'Connect Twitch' : 'Link Twitch'}</button>`;
+  }
+
+  // live Kick discovery feed (works without Twitch)
+  dataMode = 'public';
   const grid = document.getElementById('grid');
-  if(grid) grid.innerHTML = `<div class="lite-welcome">
-    <h2>Welcome to Lineup</h2>
-    <p>${twitchLinked
-        ? "You're signed in. To load your live follows and discovery, connect your Twitch — or just set up your page and explore for now."
-        : "You're signed in" + (provName(me.provider) ? ' with ' + provName(me.provider) : '') + ". You've got a profile, points, walls and the leaderboard. To go live and unlock discovery, link a Twitch account — or just explore for now."}</p>
-    <div class="lite-actions">
-      <button class="lite-cta tw" onclick="${twitchLinked ? 'connectTwitch()' : 'linkTwitch()'}"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M4 3 3 6v12h4v3h3l3-3h4l5-5V3H4zm16 9-3 3h-4l-3 3v-3H6V5h14v7zM15 8h-2v5h2V8zm-5 0H8v5h2V8z"/></svg> ${twitchLinked ? 'Connect Twitch' : 'Link Twitch for full access'}</button>
-      <button class="lite-cta" onclick="if(me)openProfile(me.username || '')">Set up my page →</button>
-    </div>
-  </div>`;
-  const rc = document.getElementById('resultCount'); if(rc) rc.textContent = '0';
+  if(grid) grid.innerHTML = '<div class="empty"><b>Finding live streamers…</b>Loading the smallest creators live on Kick right now.</div>';
+  await loadPublicKick();
+  render();
+  const rc = document.getElementById('resultCount'); if(rc) rc.textContent = (publicData || []).length;
 }
 async function afterConnectTwitch(){
   try{
@@ -1186,9 +1193,11 @@ async function loadUsername(){
   const uid = authUid;
   if(!uid){ me.username = null; return; }
   try{
-    const { data } = await sb.from('profiles').select('username, kick_slug').eq('id', uid).limit(1);
+    const { data } = await sb.from('profiles').select('username, kick_slug, display_name, avatar').eq('id', uid).limit(1);
     me.username = (data && data[0] && data[0].username) ? data[0].username : null;
     me.kick_slug = (data && data[0] && data[0].kick_slug) ? data[0].kick_slug : null;
+    if(data && data[0] && data[0].display_name) me.display_name = data[0].display_name;
+    if(data && data[0] && data[0].avatar) me.profile_image_url = data[0].avatar;
   }catch(e){ me.username = null; }
 }
 let unameTimer = null;
@@ -1905,10 +1914,10 @@ function render(){
         ${isSelf ? `<div class="self-tag"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 12 0v1"/></svg> This is you — you're live on the lineup</div>` : `<div class="card-actions">
           <button id="sup-${s.handle}" class="${btnCls}" onclick="support('${s.handle}')" ${dis}><span class="sup-label">${label}</span></button>
         </div>
-        <div class="card-sub">
+        ${dataMode === 'public' ? '' : `<div class="card-sub">
           ${discBtn}
           <button class="subbtn fb ${fbDone?'done':''}" onclick="openFeedback('${s.handle}')" ${fbDone?'disabled':''} title="${fbDone?'Feedback sent':'Leave feedback (+5)'}">${fbLabel}</button>
-        </div>`}
+        </div>`}`}
       </div>
     </article>`;
   }).join('');
