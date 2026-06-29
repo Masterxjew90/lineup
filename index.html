@@ -858,6 +858,22 @@
         <li>Drag it wherever you like on your layout.</li>
       </ol>
     </div>
+
+    <div class="pf-section-t" style="margin:20px 0 8px">🟣 Twitch panel — a Lineup banner for your Twitch profile</div>
+    <canvas id="twPanelCanvas" width="640" height="256" style="width:100%; max-width:320px; border-radius:10px; display:block; margin:0 auto 12px; border:1px solid var(--border)"></canvas>
+    <button class="boost-btn" onclick="downloadTwitchPanel()">⬇ Download panel image (PNG)</button>
+    <div class="overlay-link-row" style="margin-top:10px">
+      <input id="panelLink" readonly>
+      <button onclick="copyOverlayLink('panelLink')">Copy</button>
+    </div>
+    <div class="overlay-steps">
+      <b>How to add it on Twitch:</b>
+      <ol>
+        <li>Download the image above.</li>
+        <li>On your Twitch channel page, scroll down and turn on <b>Edit Panels</b>.</li>
+        <li>Add a panel, upload the image, and set its <b>link</b> to the URL above.</li>
+      </ol>
+    </div>
   </div>
 </div>
 
@@ -2774,8 +2790,41 @@ function openOverlayModal(){
   if(!me || !me.username){ showBanner('info', 'Pick a username first to get your overlay.'); return; }
   document.getElementById('overlayLink').value = overlayLinkFor(me.username, 'overlay.html');
   document.getElementById('levelLink').value = overlayLinkFor(me.username, 'level.html');
+  document.getElementById('panelLink').value = location.origin + location.pathname + '?u=' + encodeURIComponent(me.username);
   document.getElementById('overlayModal').style.display = 'flex';
   lockScroll(true);
+  drawTwitchPanel();
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(drawTwitchPanel);
+}
+function drawTwitchPanel(){
+  const cv = document.getElementById('twPanelCanvas'); if(!cv || !me) return;
+  const ctx = cv.getContext('2d'); const W = cv.width, H = cv.height;
+  const g = ctx.createLinearGradient(0, 0, W, H);
+  g.addColorStop(0, '#1A1C22'); g.addColorStop(1, '#22202a');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#FF5C39'; ctx.fillRect(0, 0, W, 8);
+  ctx.textBaseline = 'alphabetic';
+  ctx.font = '800 46px Inter, Arial, sans-serif';
+  ctx.fillStyle = '#fff'; ctx.fillText('Line', 36, 82);
+  const lw = ctx.measureText('Line').width;
+  ctx.fillStyle = '#FF5C39'; ctx.fillText('up', 36 + lw, 82);
+  ctx.font = '600 25px Inter, Arial, sans-serif'; ctx.fillStyle = '#EDEEF2';
+  ctx.fillText('⭐ Find me on Lineup', 36, 132);
+  ctx.font = '800 32px Inter, Arial, sans-serif'; ctx.fillStyle = '#FFB23D';
+  ctx.fillText('@' + (me.username || 'me'), 36, 184);
+  ctx.font = '500 18px Inter, Arial, sans-serif'; ctx.fillStyle = '#9396A3';
+  ctx.fillText('Small-streamer discovery', 36, 218);
+}
+function downloadTwitchPanel(){
+  const cv = document.getElementById('twPanelCanvas'); if(!cv) return;
+  cv.toBlob(b=>{
+    if(!b) return;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(b);
+    a.download = 'lineup-panel-' + (me && me.username ? me.username : 'me') + '.png';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+  }, 'image/png');
 }
 function closeOverlayModal(){ document.getElementById('overlayModal').style.display = 'none'; lockScroll(false); }
 function copyOverlayLink(id){
@@ -2963,6 +3012,7 @@ function renderProfile(){
   }
 
   const twitchLink = p.twitch_login ? `<a class="pf-link" id="pfLinkTwitch" href="https://twitch.tv/${esc(p.twitch_login)}" target="_blank" rel="noopener"><span class="pf-lk-dot" style="background:#A56BFF"></span>Twitch</a>` : '';
+  const kickLink = p.kick_slug ? `<a class="pf-link" id="pfLinkKick" href="https://kick.com/${esc(p.kick_slug)}" target="_blank" rel="noopener"><span class="pf-lk-dot" style="background:#53FC18"></span>Kick</a>` : '';
   const linkBtns = LINK_DEFS.map(d=>{
     const u = safeUrl(links[d.key]); if(!u) return '';
     return `<a class="pf-link" id="pfLink-${d.key}" href="${esc(u)}" target="_blank" rel="noopener"><span class="pf-lk-dot" style="background:${d.color}"></span>${d.label}</a>`;
@@ -2973,7 +3023,7 @@ function renderProfile(){
         <div class="pf-stat pf-lvl">${levelBadge(p.total_earned||0)}<span>level</span></div>
       </div></div>`,
     bio: p.bio ? `<div class="pf-section-t">About</div><div class="pf-bio">${esc(p.bio)}</div>` : '',
-    links: (twitchLink || linkBtns) ? `<div class="pf-section-t">Find me on</div><div class="pf-links">${twitchLink}${linkBtns}</div>` : '',
+    links: (twitchLink || kickLink || linkBtns) ? `<div class="pf-section-t">Find me on</div><div class="pf-links">${twitchLink}${kickLink}${linkBtns}</div>` : '',
     wall: '<div id="pfWall">' + wallHtml(owner) + '</div>'
   };
   const order = normLayout(p.layout).filter(x => x.show).map(x => sec[x.k]).join('');
