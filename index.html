@@ -1261,7 +1261,8 @@ async function checkMine(){
 async function syncFeature(){
   if(!me) return;
   try{
-    const { data, error } = await sb.rpc('feature_sync', { p_live: !!myLive });
+    // featured time only burns while you're live AND actually on the lineup
+    const { data, error } = await sb.rpc('feature_sync', { p_live: !!(myLive && state.listed) });
     if(error) return;
     state.featRemaining = data.remaining || 0;
     state.featRunning = !!data.running;
