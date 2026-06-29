@@ -427,6 +427,14 @@
   .pf-fb-btn:hover{filter:brightness(1.08)}
   .pf-stats{display:inline-flex; gap:22px; margin-top:16px; padding:11px 20px; background:var(--surface-2); border:1px solid var(--border); border-radius:13px}
   .pf-stat b{font-family:'JetBrains Mono',monospace; font-size:18px; color:var(--paccent)} .pf-stat span{display:block; font-size:11px; color:var(--faint); text-transform:uppercase; letter-spacing:.05em; margin-top:2px}
+  .pf-lvl{display:flex; flex-direction:column; align-items:center; justify-content:center}
+  .lvl-badge{font-family:'JetBrains Mono',monospace; font-weight:700; font-size:12px; letter-spacing:.03em; padding:3px 9px; border-radius:7px; border:1px solid; line-height:1.3; white-space:nowrap}
+  .lb-row .lvl-badge{font-size:10px; padding:2px 6px; margin-left:2px}
+  .you-level{margin-top:12px}
+  .yl-top{display:flex; align-items:center; justify-content:space-between; margin-bottom:7px}
+  .yl-next{font-size:11px; color:var(--faint)}
+  .yl-bar{height:7px; background:var(--surface-3); border-radius:99px; overflow:hidden}
+  .yl-fill{height:100%; border-radius:99px; transition:width .5s ease}
   .pf-bio{margin-top:18px; color:var(--text); font-size:15px; line-height:1.6; white-space:pre-wrap; text-align:left}
   .pf-section-t{font-size:11.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--faint); font-weight:700; margin:26px 0 12px}
   .pf-links{display:grid; grid-template-columns:1fr 1fr; gap:10px}
@@ -751,6 +759,7 @@
             <div class="you-sub">points</div>
           </div>
         </div>
+        <div class="you-level" id="youLevel" style="display:none"></div>
         <button class="mypage-btn" id="myPageBtn" style="display:none" onclick="if(me)openProfile(me.username || me.login)">View &amp; edit my page →</button>
         <button class="mypage-btn admin-open-btn" id="adminBtn" style="display:none" onclick="openAdmin()">⚑ Review reports</button>
       </div>
@@ -828,16 +837,22 @@
 <div class="modal-bg" id="overlayModal" onclick="if(event.target===this)closeOverlayModal()">
   <div class="modal">
     <div class="admin-head"><b>Your stream overlay 🎥</b><button class="music-close" style="position:static" onclick="closeOverlayModal()" aria-label="Close">✕</button></div>
-    <p class="rail-note" style="margin:0 0 12px">Add this as a <b>Browser source</b> in OBS or Streamlabs. A "Featured on Lineup" badge appears on your stream while you're featured — showing who boosted you — and stays hidden the rest of the time.</p>
+    <p class="rail-note" style="margin:0 0 12px">Add these as a <b>Browser source</b> in OBS or Streamlabs. They appear on your stream and stay hidden when there's nothing to show.</p>
+    <div class="pf-section-t" style="margin:0 0 7px">⭐ Featured badge — shows when you're featured + who boosted you</div>
     <div class="overlay-link-row">
       <input id="overlayLink" readonly>
-      <button onclick="copyOverlayLink()">Copy</button>
+      <button onclick="copyOverlayLink('overlayLink')">Copy</button>
+    </div>
+    <div class="pf-section-t" style="margin:16px 0 7px">📊 Level badge — your supporter level + progress bar</div>
+    <div class="overlay-link-row">
+      <input id="levelLink" readonly>
+      <button onclick="copyOverlayLink('levelLink')">Copy</button>
     </div>
     <div class="overlay-steps">
-      <b>How to add it in OBS:</b>
+      <b>How to add either one in OBS:</b>
       <ol>
         <li>Under <b>Sources</b>, click <b>+</b> → <b>Browser</b>.</li>
-        <li>Paste the link above into the <b>URL</b> field.</li>
+        <li>Paste a link above into the <b>URL</b> field.</li>
         <li>Set width <b>440</b>, height <b>320</b> → <b>OK</b>.</li>
         <li>Drag it wherever you like on your layout.</li>
       </ol>
@@ -1090,7 +1105,7 @@ async function afterConnectLite(user, twitchLinked){
     await syncProfileLite();
     try{ await sb.rpc('sync_verifications'); }catch(e){}
     await loadUsername();
-    renderTools();
+    renderTools(); renderYouLevel();
     await loadPointsLite();
     renderLeaderboard();
     await renderLiteHub(twitchLinked);
@@ -1150,7 +1165,7 @@ async function afterConnectTwitch(){
     await syncProfile();
     try{ await sb.rpc('sync_verifications'); }catch(e){}
     await loadUsername();
-    renderTools();
+    renderTools(); renderYouLevel();
     await loadMyState();
     await loadFollowing();
 
@@ -1194,9 +1209,10 @@ async function loadUsername(){
   const uid = authUid;
   if(!uid){ me.username = null; return; }
   try{
-    const { data } = await sb.from('profiles').select('username, kick_slug, display_name, avatar').eq('id', uid).limit(1);
+    const { data } = await sb.from('profiles').select('username, kick_slug, display_name, avatar, total_earned').eq('id', uid).limit(1);
     me.username = (data && data[0] && data[0].username) ? data[0].username : null;
     me.kick_slug = (data && data[0] && data[0].kick_slug) ? data[0].kick_slug : null;
+    me.total_earned = (data && data[0] && data[0].total_earned) || 0;
     if(data && data[0] && data[0].display_name) me.display_name = data[0].display_name;
     if(data && data[0] && data[0].avatar) me.profile_image_url = data[0].avatar;
   }catch(e){ me.username = null; }
@@ -1236,7 +1252,7 @@ async function claimUsername(){
       me.username = data.username;
       document.getElementById('userModal').style.display = 'none';
       if(document.getElementById('profile').style.display !== 'block') lockScroll(false);
-      renderTools();
+      renderTools(); renderYouLevel();
       toast('Welcome, @' + data.username, '✓');
     } else {
       const err = data && data.error;
@@ -1350,7 +1366,7 @@ async function confirmCollab(id, inviterLogin){
       if((error.message || '').toLowerCase().includes('no pending')){ showBanner('info', 'That collab is no longer available.'); loadCollabs(); return; }
       throw error;
     }
-    state.points = data;
+    setPoints(data);
     updatePointsDisplay();
     renderLeaderboard();
     toast(`Collab with <b>${inviterLogin}</b> confirmed`, '+20');
@@ -1415,7 +1431,7 @@ async function confirmRaid(id, raiderLogin){
       if((error.message || '').toLowerCase().includes('no pending')){ showBanner('info', 'That raid is no longer available.'); loadRaids(); return; }
       throw error;
     }
-    state.points = data;
+    setPoints(data);
     updatePointsDisplay();
     renderLeaderboard();
     toast(`Raid from <b>${raiderLogin}</b> confirmed`, '+10');
@@ -1699,6 +1715,31 @@ function showBanner(kind, html){
 
 // deterministic color from a string -> hue
 function hue(str){let h=0; for(const c of str) h=(h*31+c.charCodeAt(0))%360; return h;}
+// ---- leveling (based on lifetime points earned) ----
+function levelInfo(total){
+  total = Math.max(0, total || 0);
+  const lvl = Math.floor((1 + Math.sqrt(1 + 0.08 * total)) / 2);
+  const curFloor = 100 * lvl * (lvl - 1) / 2;       // points at the start of this level
+  const nextFloor = 100 * lvl * (lvl + 1) / 2;      // points needed for the next level
+  const span = nextFloor - curFloor;
+  const into = total - curFloor;
+  return {
+    level: lvl,
+    into, span,
+    pct: span > 0 ? Math.min(100, Math.round(into / span * 100)) : 100,
+    toNext: Math.max(0, nextFloor - total)
+  };
+}
+function levelColor(lvl){
+  // climbs through a friendly palette as you level
+  const stops = ['#7C8696','#3DDC97','#36B6FF','#A56BFF','#FF5C39','#FFB23D'];
+  return stops[Math.min(stops.length - 1, Math.floor((lvl - 1) / 3))];
+}
+function levelBadge(total){
+  const li = levelInfo(total);
+  const c = levelColor(li.level);
+  return `<span class="lvl-badge" style="color:${c}; border-color:${c}55; background:${c}1f">LVL ${li.level}</span>`;
+}
 function thumbBg(s){
   if(s.platform === 'kick'){ const v = hue(s.handle) % 14; return `linear-gradient(135deg, hsl(${102+v} 55% ${15+(v%6)}%), hsl(${134+v} 52% ${9+(v%5)}%))`; }
   const h=hue(s.handle); const h2=(h+38)%360;
@@ -1967,7 +2008,7 @@ async function finishWatch(handle){
       render();
       return;
     }
-    state.points = data;
+    setPoints(data);
     state.supported[handle] = { at: Date.now(), cd: cdMs };
     updatePointsDisplay();
     renderLeaderboard();
@@ -2018,7 +2059,7 @@ async function claimDiscovery(handle, item){
       if(m.includes('daily')){ showBanner('info', "You've hit today's discovery limit — back tomorrow."); render(); return; }
       throw error;
     }
-    state.points = data;
+    setPoints(data);
     state.discovered[handle] = true;
     delete armedDiscovery[handle];
     updatePointsDisplay();
@@ -2074,7 +2115,7 @@ async function submitFeedback(){
       showBanner('warn', "Couldn't send that feedback — try again.");
       return;
     }
-    state.points = data;
+    setPoints(data);
     state.feedback[handle] = Date.now();
     updatePointsDisplay();
     renderLeaderboard();
@@ -2495,7 +2536,7 @@ function pid(x){ return x && (x.username || x.twitch_login) || ''; }
 function isMe(p){ return !!(me && p && ((me.username && p.username && me.username.toLowerCase() === p.username.toLowerCase()) || (me.login && p.twitch_login && me.login.toLowerCase() === p.twitch_login.toLowerCase()))); }
 async function loadProfile(handle){
   handle = (handle || '').toLowerCase();
-  const cols = 'twitch_login, display_name, avatar, points, bio, accent, links, music_url, bg_url, layout, fb_verified, fb_name, card_url, music_list, guestbook_open, username, verified_providers, kick_slug, hidden';
+  const cols = 'twitch_login, display_name, avatar, points, total_earned, bio, accent, links, music_url, bg_url, layout, fb_verified, fb_name, card_url, music_list, guestbook_open, username, verified_providers, kick_slug, hidden';
   try{
     let { data } = await sb.from('profiles').select(cols).ilike('username', handle).limit(1);
     if(!data || !data.length){ const r2 = await sb.from('profiles').select(cols).ilike('twitch_login', handle).limit(1); data = r2.data; }
@@ -2707,19 +2748,37 @@ function renderTools(){
   if(!panel) return;
   panel.style.display = (me && me.username) ? 'block' : 'none';
 }
-function overlayLinkFor(username){
+function setPoints(newBal){
+  newBal = newBal || 0;
+  if(me && me.total_earned != null && newBal > (state.points || 0)){
+    me.total_earned += (newBal - (state.points || 0));
+    renderYouLevel();
+  }
+  state.points = newBal;
+}
+function renderYouLevel(){
+  const el = document.getElementById('youLevel'); if(!el) return;
+  if(!me || me.total_earned == null){ el.style.display = 'none'; return; }
+  const li = levelInfo(me.total_earned);
+  const c = levelColor(li.level);
+  el.style.display = 'block';
+  el.innerHTML = `<div class="yl-top">${levelBadge(me.total_earned)}<span class="yl-next">${li.toNext > 0 ? li.toNext + ' pts to LVL ' + (li.level + 1) : 'Top tier'}</span></div>
+    <div class="yl-bar"><div class="yl-fill" style="width:${li.pct}%; background:${c}"></div></div>`;
+}
+function overlayLinkFor(username, page){
   const base = location.href.split('?')[0].split('#')[0].replace(/[^/]*$/, '');
-  return base + 'overlay.html?u=' + encodeURIComponent(username);
+  return base + (page || 'overlay.html') + '?u=' + encodeURIComponent(username);
 }
 function openOverlayModal(){
   if(!me || !me.username){ showBanner('info', 'Pick a username first to get your overlay.'); return; }
-  document.getElementById('overlayLink').value = overlayLinkFor(me.username);
+  document.getElementById('overlayLink').value = overlayLinkFor(me.username, 'overlay.html');
+  document.getElementById('levelLink').value = overlayLinkFor(me.username, 'level.html');
   document.getElementById('overlayModal').style.display = 'flex';
   lockScroll(true);
 }
 function closeOverlayModal(){ document.getElementById('overlayModal').style.display = 'none'; lockScroll(false); }
-function copyOverlayLink(){
-  const inp = document.getElementById('overlayLink');
+function copyOverlayLink(id){
+  const inp = document.getElementById(id || 'overlayLink');
   inp.select(); inp.setSelectionRange(0, 99999);
   const done = ()=>toast('Overlay link copied — paste it into OBS', '📋');
   if(navigator.clipboard){ navigator.clipboard.writeText(inp.value).then(done).catch(()=>{ document.execCommand('copy'); done(); }); }
@@ -2928,7 +2987,10 @@ function renderProfile(){
       <div class="pf-name">${name}</div>
       <div class="pf-login">@${esc(p.username || p.twitch_login)}</div>
       ${verifiedBadges(p)}
-      <div class="pf-stats"><div class="pf-stat"><b>${p.points||0}</b><span>points</span></div></div>
+      <div class="pf-stats">
+        <div class="pf-stat"><b>${p.points||0}</b><span>points</span></div>
+        <div class="pf-stat pf-lvl">${levelBadge(p.total_earned||0)}<span>level</span></div>
+      </div>
       ${giveawayButton(p)}
       ${tipButtons(p)}
       ${owner ? `<div><button class="pf-edit-btn" onclick="editingProfile=true; editLayout=null; renderProfile();"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg> Edit my page</button></div>` : (me ? `<div class="pf-owner-acts">${(p.twitch_login||p.kick_slug) ? `<button class="pf-feature-btn" onclick="featureUser('${esc((p.username||p.twitch_login||'').toLowerCase())}')">⭐ Feature them · 100 pts/hr</button>` : ''}<button class="pf-report-btn" onclick="reportProfile('${esc((p.username||p.twitch_login||'').toLowerCase())}')">⚑ Report this page</button></div>` : '')}
@@ -3008,9 +3070,9 @@ async function renderLeaderboard(){
   let rows = [];
   try{
     const { data } = await sb.from('profiles')
-      .select('display_name, avatar, points, twitch_login, username')
+      .select('display_name, avatar, points, total_earned, twitch_login, username')
       .eq('hidden', false)
-      .order('points', { ascending: false })
+      .order('total_earned', { ascending: false })
       .limit(8);
     rows = data || [];
   }catch(e){}
@@ -3034,8 +3096,9 @@ async function renderLeaderboard(){
       <span class="lb-num">${rank}</span>
       <span class="lb-ava" style="${bg}"></span>
       <span class="lb-name">${name}</span>
+      ${levelBadge(r.total_earned||0)}
       ${ext}
-      <span class="lb-pts">${r.points}</span>
+      <span class="lb-pts">${r.total_earned||0}</span>
     </div>`;
   }).join('');
 }
