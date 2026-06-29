@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lineup Overlay</title>
+<style>
+  :root{
+    --accent:#FF5C39; --good:#3DDC97; --kick:#53FC18; --gold:#FFB23D;
+    --ink:#11121A; --text:#fff;
+  }
+  *{margin:0; padding:0; box-sizing:border-box}
+  html,body{background:transparent !important; overflow:hidden; font-family:'Segoe UI',system-ui,sans-serif}
+  #wrap{position:fixed; left:20px; bottom:20px; max-width:420px}
+  .card{
+    background:linear-gradient(135deg, rgba(20,21,30,.94), rgba(28,22,38,.94));
+    border:1px solid rgba(255,255,255,.12);
+    border-radius:16px; padding:15px 18px; color:var(--text);
+    box-shadow:0 12px 40px rgba(0,0,0,.5);
+    backdrop-filter:blur(6px);
+    opacity:0; transform:translateY(16px) scale(.98);
+    transition:opacity .5s ease, transform .5s ease;
+  }
+  .card.show{opacity:1; transform:translateY(0) scale(1)}
+  .top{display:flex; align-items:center; gap:9px}
+  .star{font-size:20px; filter:drop-shadow(0 0 6px rgba(255,178,61,.6)); animation:pulse 1.8s infinite}
+  @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.18)}}
+  .head{font-weight:800; font-size:16px; letter-spacing:-.01em}
+  .head b{color:var(--gold)}
+  .sub{font-size:12px; color:rgba(255,255,255,.6); margin-top:1px}
+  .boosters{margin-top:11px; display:flex; flex-direction:column; gap:6px}
+  .boost-row{display:flex; align-items:center; gap:8px; font-size:13px}
+  .boost-dot{width:7px; height:7px; border-radius:50%; background:var(--good); flex-shrink:0; box-shadow:0 0 7px var(--good)}
+  .boost-name{font-weight:700}
+  .boost-hrs{color:rgba(255,255,255,.55); font-size:11.5px}
+  .brand{
+    margin-top:12px; padding-top:10px; border-top:1px solid rgba(255,255,255,.1);
+    font-size:11px; color:rgba(255,255,255,.55); display:flex; align-items:center; gap:6px;
+  }
+  .brand .bd{width:6px; height:6px; border-radius:50%; background:var(--accent)}
+  .brand b{color:#fff; font-weight:800}
+  .brand b span{color:var(--accent)}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div class="card" id="card">
+    <div class="top">
+      <span class="star">⭐</span>
+      <div>
+        <div class="head">Featured on <b>Lineup</b></div>
+        <div class="sub" id="sub">Live in the lineup right now</div>
+      </div>
+    </div>
+    <div class="boosters" id="boosters"></div>
+    <div class="brand"><span class="bd"></span>Find small streamers at <b>Line<span>up</span></b></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  const SUPABASE_URL = 'https://pxitnueanibluylurfif.supabase.co';
+  const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4aXRudWVhbmlibHV5bHVyZmlmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0NTk3OTEsImV4cCI6MjA5ODAzNTc5MX0.M_fzzLm7nFACelBHM_BD1KXGa5yj9JAVECM3VNLSwng';
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+  const params = new URLSearchParams(location.search);
+  const username = (params.get('u') || '').trim().toLowerCase();
+  // "always" param keeps the badge up whenever featured time is banked (even offline preview)
+  const showWhenBanked = params.get('always') === '1';
+
+  const card = document.getElementById('card');
+  const boostersEl = document.getElementById('boosters');
+  const subEl = document.getElementById('sub');
+
+  function fmtHrs(h){ return h === 1 ? '1 hr' : h + ' hrs'; }
+
+  async function tick(){
+    if(!username){ subEl.textContent = 'Add ?u=yourusername to the URL'; card.classList.add('show'); return; }
+    try{
+      const { data, error } = await sb.rpc('overlay_status', { p_username: username });
+      if(error || !data || !data.found){ card.classList.remove('show'); return; }
+      const active = showWhenBanked ? data.featured : data.running;
+      if(!active){ card.classList.remove('show'); return; }
+
+      const gifters = Array.isArray(data.gifters) ? data.gifters : [];
+      if(gifters.length){
+        boostersEl.innerHTML = '<div class="sub" style="margin-bottom:1px">Boosted by</div>' + gifters.slice(0,4).map(g=>
+          `<div class="boost-row"><span class="boost-dot"></span><span class="boost-name">${escapeHtml(g.name||'Someone')}</span><span class="boost-hrs">+${fmtHrs(g.hours||1)}</span></div>`
+        ).join('');
+      } else {
+        boostersEl.innerHTML = '';
+      }
+      card.classList.add('show');
+    }catch(e){ /* keep last state */ }
+  }
+  function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  tick();
+  setInterval(tick, 12000);
+</script>
+</body>
+</html>
