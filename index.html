@@ -1107,7 +1107,8 @@ async function loadPointsLite(){
   try{
     const { data } = await sb.from('profiles').select('points').eq('id', authUid).limit(1);
     const p = data && data[0];
-    document.getElementById('youPts').textContent = (p && p.points) || 0;
+    state.points = (p && p.points) || 0;
+    document.getElementById('youPts').textContent = state.points;
   }catch(e){}
 }
 async function renderLiteHub(twitchLinked){
@@ -2682,6 +2683,7 @@ async function addPost(){
 async function featureUser(username){
   if(!me){ toast('Sign in to feature streamers', 'ℹ'); return; }
   const name = (currentProfile && currentProfile.display_name) || username;
+  try{ const { data } = await sb.from('profiles').select('points').eq('id', authUid).limit(1); if(data && data[0]) state.points = data[0].points || 0; }catch(e){}
   if((state.points || 0) < 100){ toast('You need 100 points to feature someone for an hour.', 'ℹ'); return; }
   if(!confirm('Spend 100 of your points to feature ' + name + ' in the lineup for 1 hour?\n\nThey\'ll be boosted next time they go live.')) return;
   try{
