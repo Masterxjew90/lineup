@@ -425,6 +425,7 @@
   .pf-fb-done{display:inline-flex; align-items:center; gap:7px; font-size:13.5px; font-weight:700; color:#1877F2; background:rgba(24,119,242,.1); border:1px solid rgba(24,119,242,.32); padding:10px 14px; border-radius:11px}
   .pf-fb-btn{display:inline-flex; align-items:center; gap:8px; background:#1877F2; color:#fff; font-weight:700; font-size:13.5px; padding:11px 18px; border-radius:11px}
   .pf-fb-btn:hover{filter:brightness(1.08)}
+  .pf-stats-wrap{text-align:center}
   .pf-stats{display:inline-flex; gap:22px; margin-top:16px; padding:11px 20px; background:var(--surface-2); border:1px solid var(--border); border-radius:13px}
   .pf-stat b{font-family:'JetBrains Mono',monospace; font-size:18px; color:var(--paccent)} .pf-stat span{display:block; font-size:11px; color:var(--faint); text-transform:uppercase; letter-spacing:.05em; margin-top:2px}
   .pf-lvl{display:flex; flex-direction:column; align-items:center; justify-content:center}
@@ -2967,10 +2968,10 @@ function renderProfile(){
     return `<a class="pf-link" id="pfLink-${d.key}" href="${esc(u)}" target="_blank" rel="noopener"><span class="pf-lk-dot" style="background:${d.color}"></span>${d.label}</a>`;
   }).join('');
   const sec = {
-    stats: `<div class="pf-stats">
+    stats: `<div class="pf-stats-wrap"><div class="pf-stats">
         <div class="pf-stat"><b>${p.points||0}</b><span>points</span></div>
         <div class="pf-stat pf-lvl">${levelBadge(p.total_earned||0)}<span>level</span></div>
-      </div>`,
+      </div></div>`,
     bio: p.bio ? `<div class="pf-section-t">About</div><div class="pf-bio">${esc(p.bio)}</div>` : '',
     links: (twitchLink || linkBtns) ? `<div class="pf-section-t">Find me on</div><div class="pf-links">${twitchLink}${linkBtns}</div>` : '',
     wall: '<div id="pfWall">' + wallHtml(owner) + '</div>'
