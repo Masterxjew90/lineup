@@ -496,6 +496,20 @@
   .pf-post-who:hover{color:var(--paccent)}
   .pf-post-time{font-size:11.5px; color:var(--faint)}
   .pf-post-actions{display:flex; gap:6px; justify-content:flex-end; margin-top:8px}
+  .pf-post-foot{display:flex; align-items:center; gap:8px; margin-top:9px}
+  .pf-post-foot .pf-post-actions{margin-top:0; margin-left:auto}
+  .pf-like{display:inline-flex; align-items:center; gap:5px; font-size:12.5px; font-weight:600; color:var(--faint); padding:4px 9px; border-radius:8px; border:1px solid var(--border); line-height:1; transition:color .12s, border-color .12s}
+  .pf-like:hover{color:#FF5C8A; border-color:rgba(255,92,138,.4)}
+  .pf-like .pf-like-h{font-size:13px}
+  .pf-like.liked{color:#FF4D7D; border-color:rgba(255,77,125,.5); background:rgba(255,77,125,.1)}
+  .pf-replybtn{font-size:12.5px; font-weight:600; color:var(--faint); padding:4px 9px; border-radius:8px; border:1px solid var(--border); line-height:1}
+  .pf-replybtn:hover{color:var(--text); border-color:var(--border-2)}
+  .pf-replybox{display:flex; gap:8px; margin-top:10px}
+  .pf-replybox textarea{flex:1; min-height:38px; resize:vertical; background:var(--surface-2); border:1px solid var(--border); border-radius:9px; padding:8px 11px; color:var(--text); font:inherit; font-size:13px}
+  .pf-reply-send{background:var(--accent); color:#fff; border:none; font-weight:700; font-size:13px; padding:0 15px; border-radius:9px; cursor:pointer; flex-shrink:0}
+  .pf-reply-send:hover{filter:brightness(1.08)}
+  .pf-replies{margin:10px 0 0 14px; padding-left:13px; border-left:2px solid var(--border-2); display:flex; flex-direction:column; gap:9px}
+  .pf-post.is-reply{background:var(--surface-2); padding:10px 13px}
   .pf-paction{font-size:12px; color:var(--faint); padding:3px 8px; border-radius:7px; line-height:1; border:1px solid transparent}
   .pf-paction:hover{color:var(--text); border-color:var(--border-2)}
   .pf-paction.del:hover{color:#FF5C5C; border-color:rgba(255,92,92,.4)}
@@ -2569,11 +2583,22 @@ async function loadPosts(){
   if(!wall) return;
   try{
     const { data } = await sb.from('posts')
-      .select('id, body, created_at, author_login, author_name')
+      .select('id, body, created_at, author_login, author_name, parent_id')
       .eq('wall_login', wall)
       .eq('hidden', false)
-      .order('created_at', { ascending:false }).limit(50);
-    profilePosts = data || [];
+      .order('created_at', { ascending:true }).limit(200);
+    const all = data || [];
+    let likes = {};
+    if(all.length){
+      try{ const { data: ld } = await sb.rpc('wall_likes', { p_post_ids: all.map(p=>p.id) }); likes = ld || {}; }catch(e){}
+    }
+    const tops = all.filter(p=>!p.parent_id).sort((a,b)=> new Date(b.created_at) - new Date(a.created_at));
+    const byParent = {};
+    all.filter(p=>p.parent_id).forEach(r=>{ (byParent[r.parent_id] = byParent[r.parent_id] || []).push(r); });
+    Object.values(byParent).forEach(arr=>arr.sort((a,b)=> new Date(a.created_at) - new Date(b.created_at)));
+    const attach = po=>{ po.likes = (likes[po.id]||{}).count || 0; po.liked = !!(likes[po.id]||{}).liked; };
+    tops.forEach(t=>{ attach(t); t.replies = byParent[t.id] || []; t.replies.forEach(attach); });
+    profilePosts = tops;
   }catch(e){}
 }
 function linkify(text){
@@ -2609,25 +2634,42 @@ function wallHtml(owner){
   if(!profilePosts.length){
     html += `<div class="pf-noposts">No posts yet${owner ? ' — share something above.' : '.'}</div>`;
   } else {
-    html += '<div class="pf-posts">' + profilePosts.map(po=>{
-      const who = esc(po.author_name || po.author_login || 'someone');
-      const isAuthor = myLogin && po.author_login === myLogin;
-      const canDelete = owner || isAuthor;
-      const canBlock = owner && !isAuthor;
-      const canReport = me && !isAuthor;
-      let actions = '';
-      if(canReport) actions += `<button class="pf-paction" onclick="reportPost(${po.id})" title="Report this post">⚑</button>`;
-      if(canBlock) actions += `<button class="pf-paction" onclick="blockPoster('${po.author_login}')" title="Block this user from your wall">⊘</button>`;
-      if(canDelete) actions += `<button class="pf-paction del" onclick="deletePost(${po.id})" title="Delete post">✕</button>`;
-      const whoClick = po.author_login ? `onclick="openProfile('${po.author_login}')" style="cursor:pointer"` : '';
-      return `<div class="pf-post">
-        <div class="pf-post-head"><span class="pf-post-who" ${whoClick}>${who}</span><span class="pf-post-time">${timeAgo(new Date(po.created_at).getTime())}</span></div>
-        <div class="pf-post-body">${linkify(po.body)}</div>
-        ${actions ? `<div class="pf-post-actions">${actions}</div>` : ''}
-      </div>`;
-    }).join('') + '</div>';
+    html += '<div class="pf-posts">' + profilePosts.map(po => renderWallPost(po, owner, myLogin, gbOpen, false)).join('') + '</div>';
   }
   return html;
+}
+function renderWallPost(po, owner, myLogin, gbOpen, isReply){
+  const who = esc(po.author_name || po.author_login || 'someone');
+  const isAuthor = myLogin && po.author_login === myLogin;
+  const canDelete = owner || isAuthor;
+  const canBlock = owner && !isAuthor;
+  const canReport = me && !isAuthor;
+  let actions = '';
+  if(canReport) actions += `<button class="pf-paction" onclick="reportPost(${po.id})" title="Report this post">⚑</button>`;
+  if(canBlock) actions += `<button class="pf-paction" onclick="blockPoster('${po.author_login}')" title="Block this user from your wall">⊘</button>`;
+  if(canDelete) actions += `<button class="pf-paction del" onclick="deletePost(${po.id})" title="Delete post">✕</button>`;
+  const whoClick = po.author_login ? `onclick="openProfile('${po.author_login}')" style="cursor:pointer"` : '';
+  const likeBtn = `<button class="pf-like ${po.liked?'liked':''}" id="like-${po.id}" onclick="toggleLike(${po.id})" title="Like"><span class="pf-like-h">♥</span><span class="pf-like-n">${po.likes||0}</span></button>`;
+  // only top-level posts get a reply affordance, and only when posting is allowed
+  const canReply = me && !isReply && (owner || gbOpen);
+  const replyBtn = canReply ? `<button class="pf-replybtn" onclick="toggleReplyBox(${po.id})">💬 Reply</button>` : '';
+  const replyBox = canReply ? `<div class="pf-replybox" id="rb-${po.id}" style="display:none">
+      <textarea id="rt-${po.id}" maxlength="500" placeholder="Write a reply…"></textarea>
+      <button class="pf-reply-send" onclick="addReply(${po.id})">Reply</button>
+    </div>` : '';
+  const repliesHtml = (po.replies && po.replies.length)
+    ? `<div class="pf-replies">${po.replies.map(r => renderWallPost(r, owner, myLogin, gbOpen, true)).join('')}</div>`
+    : '';
+  return `<div class="pf-post${isReply ? ' is-reply' : ''}">
+      <div class="pf-post-head"><span class="pf-post-who" ${whoClick}>${who}</span><span class="pf-post-time">${timeAgo(new Date(po.created_at).getTime())}</span></div>
+      <div class="pf-post-body">${linkify(po.body)}</div>
+      <div class="pf-post-foot">
+        ${likeBtn}${replyBtn}
+        ${actions ? `<span class="pf-post-actions">${actions}</span>` : ''}
+      </div>
+      ${replyBox}
+      ${repliesHtml}
+    </div>`;
 }
 const ADMIN_LOGIN = 'xmxj90x';
 function isAdminUser(){ return !!(me && me.login && me.login.toLowerCase() === ADMIN_LOGIN); }
@@ -2737,6 +2779,48 @@ async function addPost(){
     refreshWall();   // updates only the wall, so music keeps playing
     toast('Posted', '✓');
   }catch(e){ if(btn){ btn.disabled = false; btn.textContent = 'Post'; } toast("Couldn't post — try again", '✕'); }
+}
+async function toggleLike(id){
+  if(!me){ showBanner('info', 'Sign in to like posts.'); return; }
+  try{
+    const { data, error } = await sb.rpc('toggle_like', { p_post_id: id });
+    if(error) return;
+    const btn = document.getElementById('like-' + id);
+    if(btn){ btn.classList.toggle('liked', !!data.liked); const n = btn.querySelector('.pf-like-n'); if(n) n.textContent = data.count; }
+    const upd = arr => arr && arr.forEach(p=>{ if(p.id === id){ p.liked = data.liked; p.likes = data.count; } if(p.replies) upd(p.replies); });
+    upd(profilePosts);
+  }catch(e){}
+}
+function toggleReplyBox(id){
+  const box = document.getElementById('rb-' + id); if(!box) return;
+  const show = box.style.display === 'none';
+  box.style.display = show ? 'flex' : 'none';
+  if(show){ const ta = document.getElementById('rt-' + id); if(ta) ta.focus(); }
+}
+async function addReply(parentId){
+  const ta = document.getElementById('rt-' + parentId); if(!ta) return;
+  const body = (ta.value || '').trim();
+  if(!body) return;
+  if(containsBlocked(body)){ toast('Please keep it civil — that reply contains blocked language.', '✕'); return; }
+  const btn = ta.parentElement.querySelector('.pf-reply-send');
+  if(btn){ btn.disabled = true; btn.textContent = 'Replying…'; }
+  try{
+    const { error } = await sb.rpc('add_wall_reply', { p_parent_id: parentId, p_body: body });
+    if(error){
+      const m = (error.message || '').toLowerCase();
+      if(m.includes('too fast')) toast('Give it a few seconds between posts', '⏳');
+      else if(m.includes('offensive')) toast('Please keep it civil — that reply was blocked.', '✕');
+      else if(m.includes('daily limit')) toast("That's enough posts for today", '✋');
+      else if(m.includes('guestbook closed')) toast('This guestbook is closed', '🔒');
+      else if(m.includes('blocked')) toast("You can't post on this wall", '⛔');
+      else toast("Couldn't reply — try again", '✕');
+      if(btn){ btn.disabled = false; btn.textContent = 'Reply'; }
+      return;
+    }
+    await loadPosts();
+    refreshWall();
+    toast('Replied', '✓');
+  }catch(e){ if(btn){ btn.disabled = false; btn.textContent = 'Reply'; } toast("Couldn't reply — try again", '✕'); }
 }
 async function featureUser(username){
   if(!me){ toast('Sign in to feature streamers', 'ℹ'); return; }
