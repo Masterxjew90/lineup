@@ -3015,9 +3015,10 @@ function renderProfile(){
   const kickSlugUrl = p.kick_slug ? p.kick_slug.replace(/_/g, '-') : '';
   const kickLink = p.kick_slug ? `<a class="pf-link" id="pfLinkKick" href="https://kick.com/${esc(kickSlugUrl)}" target="_blank" rel="noopener"><span class="pf-lk-dot" style="background:#53FC18"></span>Kick</a>` : '';
   const linkBtns = LINK_DEFS.map(d=>{
+    const raw = (links[d.key] || '').toString().toLowerCase();
+    // skip a manual Kick link if we're already auto-showing one (any stored format)
+    if(p.kick_slug && (d.key === 'kick' || raw.includes('kick.com'))) return '';
     const u = safeUrl(links[d.key]); if(!u) return '';
-    // skip a manual Kick link if we're already auto-showing one (avoid duplicates)
-    if(p.kick_slug && /(^|\.)kick\.com\//i.test(u)) return '';
     return `<a class="pf-link" id="pfLink-${d.key}" href="${esc(u)}" target="_blank" rel="noopener"><span class="pf-lk-dot" style="background:${d.color}"></span>${d.label}</a>`;
   }).join('');
   const sec = {
