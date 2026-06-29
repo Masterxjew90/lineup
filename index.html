@@ -131,6 +131,14 @@
   .guest-alt:hover{border-color:var(--border-2)}
   .guest-alt.kick{color:#53FC18}
   body.public-mode .golive{display:none}
+  .overlay-link-row{display:flex; gap:8px; margin-bottom:14px}
+  .overlay-link-row input{flex:1; min-width:0; background:var(--surface-2); border:1px solid var(--border); border-radius:9px; padding:10px 12px; color:var(--text); font-size:12.5px; font-family:'JetBrains Mono',monospace}
+  .overlay-link-row button{background:var(--accent); color:#fff; border:none; font-weight:700; padding:10px 16px; border-radius:9px; cursor:pointer}
+  .overlay-link-row button:hover{filter:brightness(1.08)}
+  .overlay-steps{font-size:13px; color:var(--dim); line-height:1.6}
+  .overlay-steps b{color:var(--text)}
+  .overlay-steps ol{margin:7px 0 0; padding-left:20px}
+  .overlay-steps li{margin-bottom:4px}
   .banner{display:none; align-items:center; gap:13px; padding:14px 16px; border-radius:var(--r); margin:18px 0 0; font-size:13.5px; line-height:1.5}
   .banner svg{flex-shrink:0}
   .banner.info{background:rgba(165,107,255,.10); border:1px solid rgba(165,107,255,.32); color:#CDB8FF}
@@ -750,6 +758,12 @@
         <div id="boostBody"></div>
       </div>
 
+      <div class="panel" id="toolsPanel" style="display:none">
+        <h3>Stream tools 🎥</h3>
+        <p class="rail-note" style="margin:0 0 11px">Add a Lineup overlay to your stream — it shows when you're featured and who boosted you, right on screen.</p>
+        <button class="boost-btn" onclick="openOverlayModal()">Get my overlay link</button>
+      </div>
+
       <div class="panel" id="collabPanel" style="display:none">
         <h3>Collab <span class="collab-amt">+20 each</span></h3>
         <div id="collabBody"></div>
@@ -805,6 +819,26 @@
     <div class="fb-foot">
       <span class="fb-count" id="ageErr"></span>
       <button class="fb-submit" id="ageSubmit" onclick="submitAge()">Continue</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="overlayModal" onclick="if(event.target===this)closeOverlayModal()">
+  <div class="modal">
+    <div class="admin-head"><b>Your stream overlay 🎥</b><button class="music-close" style="position:static" onclick="closeOverlayModal()" aria-label="Close">✕</button></div>
+    <p class="rail-note" style="margin:0 0 12px">Add this as a <b>Browser source</b> in OBS or Streamlabs. A "Featured on Lineup" badge appears on your stream while you're featured — showing who boosted you — and stays hidden the rest of the time.</p>
+    <div class="overlay-link-row">
+      <input id="overlayLink" readonly>
+      <button onclick="copyOverlayLink()">Copy</button>
+    </div>
+    <div class="overlay-steps">
+      <b>How to add it in OBS:</b>
+      <ol>
+        <li>Under <b>Sources</b>, click <b>+</b> → <b>Browser</b>.</li>
+        <li>Paste the link above into the <b>URL</b> field.</li>
+        <li>Set width <b>440</b>, height <b>320</b> → <b>OK</b>.</li>
+        <li>Drag it wherever you like on your layout.</li>
+      </ol>
     </div>
   </div>
 </div>
@@ -1054,6 +1088,7 @@ async function afterConnectLite(user, twitchLinked){
     await syncProfileLite();
     try{ await sb.rpc('sync_verifications'); }catch(e){}
     await loadUsername();
+    renderTools();
     await loadPointsLite();
     renderLeaderboard();
     renderLiteHub(twitchLinked);
@@ -1107,6 +1142,7 @@ async function afterConnectTwitch(){
     await syncProfile();
     try{ await sb.rpc('sync_verifications'); }catch(e){}
     await loadUsername();
+    renderTools();
     await loadMyState();
     await loadFollowing();
 
@@ -1190,6 +1226,7 @@ async function claimUsername(){
       me.username = data.username;
       document.getElementById('userModal').style.display = 'none';
       if(document.getElementById('profile').style.display !== 'block') lockScroll(false);
+      renderTools();
       toast('Welcome, @' + data.username, '✓');
     } else {
       const err = data && data.error;
@@ -2652,6 +2689,29 @@ async function featureUser(username){
     renderLeaderboard();
     toast('⭐ You featured <b>' + esc(name) + '</b> for 1 hour!', '⭐');
   }catch(e){ toast("Couldn't feature — try again", '✕'); }
+}
+function renderTools(){
+  const panel = document.getElementById('toolsPanel');
+  if(!panel) return;
+  panel.style.display = (me && me.username) ? 'block' : 'none';
+}
+function overlayLinkFor(username){
+  const base = location.href.split('?')[0].split('#')[0].replace(/[^/]*$/, '');
+  return base + 'overlay.html?u=' + encodeURIComponent(username);
+}
+function openOverlayModal(){
+  if(!me || !me.username){ showBanner('info', 'Pick a username first to get your overlay.'); return; }
+  document.getElementById('overlayLink').value = overlayLinkFor(me.username);
+  document.getElementById('overlayModal').style.display = 'flex';
+  lockScroll(true);
+}
+function closeOverlayModal(){ document.getElementById('overlayModal').style.display = 'none'; lockScroll(false); }
+function copyOverlayLink(){
+  const inp = document.getElementById('overlayLink');
+  inp.select(); inp.setSelectionRange(0, 99999);
+  const done = ()=>toast('Overlay link copied — paste it into OBS', '📋');
+  if(navigator.clipboard){ navigator.clipboard.writeText(inp.value).then(done).catch(()=>{ document.execCommand('copy'); done(); }); }
+  else { document.execCommand('copy'); done(); }
 }
 async function reportProfile(username){
   if(!me){ toast('Sign in to report a page', 'ℹ'); return; }
