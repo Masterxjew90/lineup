@@ -1574,7 +1574,7 @@ function mapKickDiscover(s, gameName){
     lang: (s.language || '').toUpperCase(),
     mature: !!s.mature, tags: [],
     thumb: '', avatar: null,
-    url: 'https://kick.com/' + s.slug,
+    url: 'https://kick.com/' + String(s.slug || '').replace(/_/g, '-'),
   };
 }
 async function fetchCategory(gameId, gameName, quiet){
@@ -2308,7 +2308,7 @@ function mapKickStream(m, info, featured){
     title: info.title || 'Live on Kick', game: info.category || 'Live', cat: info.category || 'Live',
     platform: 'kick', viewers: info.viewers || 0, lang: '', mature: false, tags: [],
     thumb: info.thumbnail || '', avatar: m.avatar || null,
-    url: 'https://kick.com/' + slug, username: m.username, featured: !!featured,
+    url: 'https://kick.com/' + String(slug || '').replace(/_/g, '-'), username: m.username, featured: !!featured,
   };
 }
 function renderOffline(){
@@ -3012,9 +3012,12 @@ function renderProfile(){
   }
 
   const twitchLink = p.twitch_login ? `<a class="pf-link" id="pfLinkTwitch" href="https://twitch.tv/${esc(p.twitch_login)}" target="_blank" rel="noopener"><span class="pf-lk-dot" style="background:#A56BFF"></span>Twitch</a>` : '';
-  const kickLink = p.kick_slug ? `<a class="pf-link" id="pfLinkKick" href="https://kick.com/${esc(p.kick_slug)}" target="_blank" rel="noopener"><span class="pf-lk-dot" style="background:#53FC18"></span>Kick</a>` : '';
+  const kickSlugUrl = p.kick_slug ? p.kick_slug.replace(/_/g, '-') : '';
+  const kickLink = p.kick_slug ? `<a class="pf-link" id="pfLinkKick" href="https://kick.com/${esc(kickSlugUrl)}" target="_blank" rel="noopener"><span class="pf-lk-dot" style="background:#53FC18"></span>Kick</a>` : '';
   const linkBtns = LINK_DEFS.map(d=>{
     const u = safeUrl(links[d.key]); if(!u) return '';
+    // skip a manual Kick link if we're already auto-showing one (avoid duplicates)
+    if(p.kick_slug && /(^|\.)kick\.com\//i.test(u)) return '';
     return `<a class="pf-link" id="pfLink-${d.key}" href="${esc(u)}" target="_blank" rel="noopener"><span class="pf-lk-dot" style="background:${d.color}"></span>${d.label}</a>`;
   }).join('');
   const sec = {
