@@ -33,6 +33,7 @@
   .boost-dot{width:7px; height:7px; border-radius:50%; background:var(--good); flex-shrink:0; box-shadow:0 0 7px var(--good)}
   .boost-name{font-weight:700}
   .boost-hrs{color:rgba(255,255,255,.55); font-size:11.5px}
+  .boost-more{font-size:11.5px; color:rgba(255,255,255,.5); margin-top:2px; padding-left:15px}
   .brand{
     margin-top:12px; padding-top:10px; border-top:1px solid rgba(255,255,255,.1);
     font-size:11px; color:rgba(255,255,255,.55); display:flex; align-items:center; gap:6px;
@@ -83,10 +84,16 @@
       if(!active){ card.classList.remove('show'); return; }
 
       const gifters = Array.isArray(data.gifters) ? data.gifters : [];
+      const total = data.booster_count || gifters.length;
       if(gifters.length){
-        boostersEl.innerHTML = '<div class="sub" style="margin-bottom:1px">Boosted by</div>' + gifters.slice(0,4).map(g=>
+        let html = '<div class="sub" style="margin-bottom:1px">Boosted by</div>';
+        html += gifters.slice(0,3).map(g=>
           `<div class="boost-row"><span class="boost-dot"></span><span class="boost-name">${escapeHtml(g.name||'Someone')}</span><span class="boost-hrs">+${fmtHrs(g.hours||1)}</span></div>`
         ).join('');
+        const shown = Math.min(3, gifters.length);
+        const more = total - shown;
+        if(more > 0) html += `<div class="boost-more">+${more} more booster${more===1?'':'s'}</div>`;
+        boostersEl.innerHTML = html;
       } else {
         boostersEl.innerHTML = '';
       }
