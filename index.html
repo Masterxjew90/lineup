@@ -120,6 +120,15 @@
   .me-chip-go{display:flex; align-items:center; gap:9px; cursor:pointer; border-radius:999px; padding:2px 4px 2px 2px}
   .me-chip-go:hover{background:var(--surface-3)}
   .me-chip-go:hover .mn{color:var(--accent)}
+  .mem-count{font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--faint); font-weight:600; margin-left:4px}
+  .members{display:flex; flex-direction:column; gap:2px; max-height:340px; overflow-y:auto; margin:0 -4px; padding:0 4px}
+  .mem-row{display:flex; align-items:center; gap:9px; padding:6px 7px; border-radius:9px; cursor:pointer; transition:background .12s}
+  .mem-row:hover{background:var(--surface-2)}
+  .mem-row.me{background:rgba(61,220,151,.08)}
+  .mem-ava{width:26px; height:26px; border-radius:50%; flex-shrink:0; background-position:center}
+  .mem-name{font-size:13px; font-weight:600; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .mem-plats{display:flex; gap:3px; flex-shrink:0}
+  .mem-dot{width:7px; height:7px; border-radius:50%}
   .me-chip img{width:30px; height:30px; border-radius:50%; object-fit:cover}
   .me-chip .mn{font-size:13.5px; font-weight:600; padding-right:2px}
   .me-chip button{color:var(--faint); font-size:13px; padding:4px 7px; border-radius:7px}
@@ -806,6 +815,11 @@
       <div class="panel">
         <h3>Top supporters</h3>
         <div class="lb" id="leaderboard"></div>
+      </div>
+
+      <div class="panel">
+        <h3>Lineup members <span class="mem-count" id="memCount"></span></h3>
+        <div class="members" id="membersList"></div>
       </div>
 
       <div class="panel">
@@ -3225,12 +3239,13 @@ async function renderLeaderboard(){
       .select('display_name, avatar, points, total_earned, twitch_login, username')
       .eq('hidden', false)
       .order('total_earned', { ascending: false })
-      .limit(8);
+      .limit(5);
     rows = data || [];
   }catch(e){}
 
   if(!rows.length){
     el.innerHTML = `<div class="rail-note">No scores yet — be the first to show up for a streamer and you'll top the board.</div>`;
+    renderMembers();
     return;
   }
   const myLogin = me ? me.login : null;
@@ -3250,6 +3265,39 @@ async function renderLeaderboard(){
       <span class="lb-name">${name}</span>
       ${ext}
       <span class="lb-pts">${r.total_earned||0}</span>
+    </div>`;
+  }).join('');
+  renderMembers();
+}
+
+async function renderMembers(){
+  const el = document.getElementById('membersList');
+  const cnt = document.getElementById('memCount');
+  if(!el) return;
+  let rows = [];
+  try{
+    const { data } = await sb.from('profiles')
+      .select('display_name, avatar, twitch_login, kick_slug, username, total_earned')
+      .eq('hidden', false)
+      .not('username', 'is', null)
+      .order('total_earned', { ascending: false })
+      .limit(200);
+    rows = data || [];
+  }catch(e){}
+  if(cnt) cnt.textContent = rows.length ? rows.length : '';
+  if(!rows.length){ el.innerHTML = `<div class="rail-note">No members yet.</div>`; return; }
+  const myLogin = me ? me.login : null;
+  el.innerHTML = rows.map(r=>{
+    const name = r.display_name || r.username || r.twitch_login || 'streamer';
+    const mine = myLogin && r.twitch_login === myLogin;
+    const bg = r.avatar ? `background-image:url('${r.avatar}'); background-size:cover`
+                        : `background:linear-gradient(135deg, hsl(${hue(name)} 55% 55%), hsl(${(hue(name)+50)%360} 60% 42%))`;
+    const plats = (r.twitch_login ? '<span class="mem-dot" style="background:#A56BFF" title="Twitch"></span>' : '')
+                + (r.kick_slug ? '<span class="mem-dot" style="background:#53FC18" title="Kick"></span>' : '');
+    return `<div class="mem-row ${mine?'me':''}" onclick="openProfile('${pid(r)}')" title="View ${esc(name)}'s page">
+      <span class="mem-ava" style="${bg}"></span>
+      <span class="mem-name">${esc(name)}</span>
+      <span class="mem-plats">${plats}</span>
     </div>`;
   }).join('');
 }
