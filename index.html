@@ -3012,8 +3012,11 @@ async function deletePost(id){
   try{
     const { error } = await sb.from('posts').delete().eq('id', id);
     if(error) throw error;
+    // remove whether it's a top-level post or a reply nested under one
     profilePosts = profilePosts.filter(p => p.id !== id);
+    profilePosts.forEach(p => { if(p.replies) p.replies = p.replies.filter(r => r.id !== id); });
     refreshWall();
+    toast('Deleted', '✓');
   }catch(e){ toast("Couldn't delete — try again", '✕'); }
 }
 function closeProfile(){
