@@ -155,6 +155,17 @@
   .pf-badge-count{font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--good); background:rgba(61,220,151,.12); padding:1px 8px; border-radius:6px; margin-left:6px; vertical-align:middle}
   .pf-badges{display:flex; flex-wrap:wrap; gap:8px; justify-content:center}
   .pf-badge{display:inline-flex; align-items:center; gap:5px; font-size:13px; font-weight:700; background:var(--surface-2); border:1px solid var(--border-2); border-radius:999px; padding:6px 13px}
+  .share-presets{display:flex; gap:7px; margin-bottom:11px; flex-wrap:wrap}
+  .share-presets button{flex:1; min-width:90px; background:var(--surface-2); border:1px solid var(--border); color:var(--text); font-size:12.5px; font-weight:600; padding:8px; border-radius:9px; cursor:pointer}
+  .share-presets button:hover{border-color:var(--border-2); background:var(--surface-3)}
+  #shareText{width:100%; min-height:72px; resize:vertical; background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:11px 13px; color:var(--text); font:inherit; font-size:14px; line-height:1.5}
+  .share-link{font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--accent); background:var(--surface-2); border:1px solid var(--border); border-radius:9px; padding:9px 12px; margin:10px 0 14px; word-break:break-all}
+  .share-actions{display:flex; gap:8px; flex-wrap:wrap}
+  .share-actions button{flex:1; min-width:100px; border:none; font-weight:700; font-size:13px; padding:11px; border-radius:10px; cursor:pointer}
+  .share-x{background:#000; color:#fff; border:1px solid var(--border-2)!important}
+  .share-native{background:var(--accent); color:#fff}
+  .share-copy{background:var(--surface-3); color:var(--text); border:1px solid var(--border)!important}
+  .share-actions button:hover{filter:brightness(1.1)}
   .mem-count{font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--faint); font-weight:600; margin-left:4px}
   .members{display:flex; flex-direction:column; gap:2px; max-height:340px; overflow-y:auto; margin:0 -4px; padding:0 4px}
   .mem-row{display:flex; align-items:center; gap:9px; padding:6px 7px; border-radius:9px; cursor:pointer; transition:background .12s}
@@ -824,6 +835,7 @@
         <div class="you-level" id="youLevel" style="display:none"></div>
         <button class="mypage-btn" id="myPageBtn" style="display:none" onclick="if(me)openProfile(me.username || me.login)">View &amp; edit my page →</button>
         <button class="mypage-btn" id="achieveBtn" style="display:none" onclick="openAchievements()">🏆 My achievements</button>
+        <button class="mypage-btn" id="shareBtn" style="display:none" onclick="openShareModal()">📣 Share my page</button>
         <button class="mypage-btn admin-open-btn" id="adminBtn" style="display:none" onclick="openAdmin()">⚑ Review reports</button>
       </div>
 
@@ -913,6 +925,25 @@
     <div class="fb-foot">
       <span class="fb-count" id="ageErr"></span>
       <button class="fb-submit" id="ageSubmit" onclick="submitAge()">Continue</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="shareModal" onclick="if(event.target===this)closeShare()">
+  <div class="modal">
+    <div class="admin-head"><b>📣 Share your Lineup</b><button class="music-close" style="position:static" onclick="closeShare()" aria-label="Close">✕</button></div>
+    <p class="rail-note" style="margin:0 0 12px">Post a clip on TikTok, YouTube Shorts, or X — then drop this in the caption to send viewers to your Lineup page.</p>
+    <div class="share-presets">
+      <button onclick="setSharePreset(0)">🔴 Going live</button>
+      <button onclick="setSharePreset(1)">✨ General</button>
+      <button onclick="setSharePreset(2)">🎬 Clip caption</button>
+    </div>
+    <textarea id="shareText" maxlength="240"></textarea>
+    <div class="share-link" id="shareLinkShown"></div>
+    <div class="share-actions">
+      <button class="share-x" onclick="shareToX()">Share on X</button>
+      <button class="share-native" id="shareNativeBtn" onclick="shareNative()">Share…</button>
+      <button class="share-copy" onclick="copyShareMsg()">Copy caption</button>
     </div>
   </div>
 </div>
@@ -3056,7 +3087,40 @@ async function afterLoginReferral(){
   renderReferral();
   renderTrain();
   const ab = document.getElementById('achieveBtn'); if(ab) ab.style.display = (me && me.username) ? 'block' : 'none';
+  const sb2 = document.getElementById('shareBtn'); if(sb2) sb2.style.display = (me && me.username) ? 'block' : 'none';
   checkNewAchievements(true);
+}
+const SHARE_PRESETS = [
+  '🔴 Live now! Come hang out — and discover more small streamers on Lineup 👇',
+  "I'm on Lineup — where small streamers actually get discovered. Come find me 👇",
+  'Watch the full stream 👉 (and find more small streamers to support on Lineup)'
+];
+function shareLinkUrl(){ return location.origin + location.pathname + '?u=' + encodeURIComponent(me.username); }
+function openShareModal(){
+  if(!me || !me.username){ showBanner('info', 'Pick a username first to share your page.'); return; }
+  document.getElementById('shareText').value = SHARE_PRESETS[0];
+  document.getElementById('shareLinkShown').textContent = shareLinkUrl();
+  const nb = document.getElementById('shareNativeBtn'); if(nb) nb.style.display = navigator.share ? '' : 'none';
+  document.getElementById('shareModal').style.display = 'flex';
+  lockScroll(true);
+}
+function setSharePreset(i){ const t = document.getElementById('shareText'); if(t) t.value = SHARE_PRESETS[i] || ''; }
+function closeShare(){ const m = document.getElementById('shareModal'); if(m) m.style.display = 'none'; lockScroll(false); }
+function shareToX(){
+  const t = document.getElementById('shareText').value || '';
+  const url = 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(t) + '&url=' + encodeURIComponent(shareLinkUrl());
+  window.open(url, '_blank', 'noopener');
+}
+async function shareNative(){
+  const t = document.getElementById('shareText').value || '';
+  if(navigator.share){ try{ await navigator.share({ text: t, url: shareLinkUrl() }); }catch(e){} }
+  else copyShareMsg();
+}
+function copyShareMsg(){
+  const t = (document.getElementById('shareText').value || '') + '\n' + shareLinkUrl();
+  const done = ()=>toast('Caption copied — paste it with your clip', '📋');
+  if(navigator.clipboard){ navigator.clipboard.writeText(t).then(done).catch(()=>{}); }
+  else { const ta = document.getElementById('shareText'); ta.select(); document.execCommand('copy'); done(); }
 }
 function renderTrain(){
   const panel = document.getElementById('trainPanel');
