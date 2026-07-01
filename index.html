@@ -126,6 +126,22 @@
   .refer-link-row button{background:var(--accent); color:#fff; border:none; font-weight:700; font-size:12px; padding:8px 13px; border-radius:8px; cursor:pointer}
   .refer-link-row button:hover{filter:brightness(1.08)}
   .refer-count{font-size:12px; color:var(--dim); font-weight:600}
+  .train-you{display:flex; align-items:center; justify-content:space-between; font-size:13px; font-weight:700; color:var(--good); margin-bottom:11px}
+  .train-leave{font-size:11px; font-weight:600; color:var(--faint); border:1px solid var(--border); padding:3px 9px; border-radius:7px}
+  .train-leave:hover{color:var(--text); border-color:var(--border-2)}
+  .train-list{display:flex; flex-direction:column; gap:3px; margin-bottom:11px}
+  .train-row{display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:8px; font-size:13px; background:var(--surface-2)}
+  .train-row.me{background:rgba(255,92,57,.12); border:1px solid rgba(255,92,57,.3)}
+  .train-num{font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--faint); width:14px}
+  .train-pdot{width:7px; height:7px; border-radius:50%; flex-shrink:0}
+  .train-name{flex:1; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .train-live{font-size:11px; color:var(--dim); font-family:'JetBrains Mono',monospace}
+  .train-next{background:var(--surface-2); border:1px solid var(--border); border-radius:11px; padding:12px 13px}
+  .train-next-lbl{font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--faint); margin-bottom:7px}
+  .train-raid-btn{display:block; text-align:center; background:linear-gradient(135deg,#FF5C39,#FF3B7C); color:#fff; font-weight:800; font-size:14px; padding:10px; border-radius:9px}
+  .train-raid-btn:hover{filter:brightness(1.08)}
+  .train-confirm{width:100%; margin-top:9px; background:var(--good); color:#08130d; border:none; font-weight:700; font-size:13px; padding:9px; border-radius:9px; cursor:pointer}
+  .train-confirm:hover{filter:brightness(1.06)}
   .mem-count{font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--faint); font-weight:600; margin-left:4px}
   .members{display:flex; flex-direction:column; gap:2px; max-height:340px; overflow-y:auto; margin:0 -4px; padding:0 4px}
   .mem-row{display:flex; align-items:center; gap:9px; padding:6px 7px; border-radius:9px; cursor:pointer; transition:background .12s}
@@ -818,6 +834,11 @@
         <div class="refer-count" id="referCount"></div>
       </div>
 
+      <div class="panel" id="trainPanel" style="display:none">
+        <h3>Raid train 🚂 <span class="refer-amt">+10 pts</span></h3>
+        <div id="trainBody"></div>
+      </div>
+
       <div class="panel" id="collabPanel" style="display:none">
         <h3>Collab <span class="collab-amt">+20 each</span></h3>
         <div id="collabBody"></div>
@@ -1274,11 +1295,12 @@ async function loadUsername(){
   const uid = authUid;
   if(!uid){ me.username = null; return; }
   try{
-    const { data } = await sb.from('profiles').select('username, kick_slug, display_name, avatar, total_earned, referral_count').eq('id', uid).limit(1);
+    const { data } = await sb.from('profiles').select('username, kick_slug, display_name, avatar, total_earned, referral_count, in_train').eq('id', uid).limit(1);
     me.username = (data && data[0] && data[0].username) ? data[0].username : null;
     me.kick_slug = (data && data[0] && data[0].kick_slug) ? data[0].kick_slug : null;
     me.total_earned = (data && data[0] && data[0].total_earned) || 0;
     me.referral_count = (data && data[0] && data[0].referral_count) || 0;
+    me.in_train = !!(data && data[0] && data[0].in_train);
     if(data && data[0] && data[0].display_name) me.display_name = data[0].display_name;
     if(data && data[0] && data[0].avatar) me.profile_image_url = data[0].avatar;
   }catch(e){ me.username = null; }
@@ -1609,6 +1631,9 @@ async function refreshActive(manual){
     if(dataMode === 'follows'){ await loadFollowedLive(); render(); if(manual) toast('Live list updated', '↻'); }
     else if(dataMode === 'browse' && browseGameId && manual){ await fetchCategory(browseGameId, browseLabel, true); toast('Live list updated', '↻'); }
     else if(dataMode === 'lineup'){ await loadLineup(); render(); renderOffline(); if(manual) toast('Lineup updated', '↻'); }
+    // keep the raid train current even when not viewing the lineup tab
+    if(me.in_train && dataMode !== 'lineup'){ try{ await loadLineup(); }catch(e){} }
+    if(me.in_train) renderTrain();
     try{ await checkMine(); await loadCollabs(); await loadRaids(); }catch(e){}
   }catch(e){
     if(e.message === 'expired') showBanner('warn', 'Your Twitch session expired — hit Connect Twitch.');
@@ -2237,7 +2262,7 @@ async function goLive(){
     renderGoLive();
     await checkMine();   // refresh live status + bank/resume featured time
     renderBoost();
-    if(dataMode === 'lineup'){ await loadLineup(); render(); renderOffline(); }
+    if(dataMode === 'lineup'){ await loadLineup(); render(); renderOffline(); renderTrain(); }
   }catch(e){ showBanner('warn', "Couldn't update your lineup status — try again."); }
 }
 function renderGoLive(){
@@ -2267,7 +2292,7 @@ async function featureMe(hours){
     showBanner('ok', myLive
       ? "You're featured at the top of the lineup — nice."
       : "Featured time added to your bank. It starts the moment you go live.");
-    if(dataMode === 'lineup'){ await loadLineup(); render(); renderOffline(); }
+    if(dataMode === 'lineup'){ await loadLineup(); render(); renderOffline(); renderTrain(); }
   }catch(e){ showBanner('warn', "Couldn't add featured time — try again."); }
 }
 function fmtClock(ms){
@@ -2942,6 +2967,74 @@ function copyReferLink(){
 async function afterLoginReferral(){
   try{ await sb.rpc('try_pay_referral'); }catch(e){}
   renderReferral();
+  renderTrain();
+}
+function renderTrain(){
+  const panel = document.getElementById('trainPanel');
+  if(!panel) return;
+  if(!(me && me.username)){ panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  const body = document.getElementById('trainBody');
+  const liveTrain = (lineupLive || []).filter(c => c.inTrain);
+  if(!me.in_train){
+    body.innerHTML = `<p class="rail-note" style="margin:0 0 11px">Join the community raid train. When you wrap up your stream, raid the next live member and pass your viewers down the line — everyone grows together.</p>
+      <button class="boost-btn" onclick="joinTrain(true)">🚂 Join the raid train</button>`;
+    return;
+  }
+  let html = `<div class="train-you">In the train ✓ <button class="train-leave" onclick="joinTrain(false)">Leave</button></div>`;
+  if(!liveTrain.length){
+    html += `<p class="rail-note">No train members are live right now. Go live and get on the lineup to ride — check back when others are streaming.</p>`;
+    body.innerHTML = html; return;
+  }
+  const myIdx = liveTrain.findIndex(c => (c.username||'').toLowerCase() === (me.username||'').toLowerCase());
+  html += '<div class="train-list">' + liveTrain.map((c,i)=>{
+    const meRow = myIdx === i;
+    const pdot = c.platform === 'kick' ? '#53FC18' : '#A56BFF';
+    return `<div class="train-row ${meRow?'me':''}"><span class="train-num">${i+1}</span><span class="train-pdot" style="background:${pdot}"></span><span class="train-name">${esc(c.name || c.username)}</span><span class="train-live">${fmt(c.viewers||0)}👁</span></div>`;
+  }).join('') + '</div>';
+  if(myIdx < 0){
+    html += `<p class="rail-note">You're in the train — go live and get on the lineup to appear here and get your raid target.</p>`;
+  } else if(liveTrain.length < 2){
+    html += `<p class="rail-note">You're the only one live right now. Hang tight for others to hop on the ride!</p>`;
+  } else {
+    const next = liveTrain[(myIdx + 1) % liveTrain.length];
+    const raidHint = next.platform === 'twitch'
+      ? `In your chat type <b>/raid ${esc(next.handle||'')}</b> when you're done, then confirm.`
+      : `Send your viewers to them, then confirm below.`;
+    html += `<div class="train-next">
+        <div class="train-next-lbl">Your raid target</div>
+        <a class="train-raid-btn" href="${esc(next.url||'#')}" target="_blank" rel="noopener">Raid ${esc(next.name || next.username)} →</a>
+        <div class="rail-note" style="margin-top:7px">${raidHint}</div>
+        <button class="train-confirm" onclick="confirmRaid()">✓ I raided them (+10)</button>
+      </div>`;
+  }
+  body.innerHTML = html;
+}
+async function joinTrain(on){
+  if(!me){ return; }
+  try{
+    const { error } = await sb.rpc('join_train', { p_on: !!on });
+    if(error){ toast("Couldn't update — try again", '✕'); return; }
+    me.in_train = !!on;
+    renderTrain();
+    toast(on ? 'You joined the raid train!' : 'Left the raid train', on ? '🚂' : 'ℹ');
+    if(on && !state.listed) showBanner('info', 'Tip: go live and hit "Go live" so you show up in the train while streaming.');
+  }catch(e){ toast("Couldn't update — try again", '✕'); }
+}
+async function confirmRaid(){
+  try{
+    const { data, error } = await sb.rpc('train_raid');
+    if(error){
+      const m = (error.message || '').toLowerCase();
+      if(m.includes('cooldown')) toast('You already logged a raid recently — try again later.', '⏳');
+      else if(m.includes('not in train')) toast('Join the train first', 'ℹ');
+      else toast("Couldn't log that — try again", '✕');
+      return;
+    }
+    setPoints(data.points);
+    updatePointsDisplay();
+    toast('Raid logged — nice! +10 points', '🚂');
+  }catch(e){ toast("Couldn't log that — try again", '✕'); }
 }
 function renderYouLevel(){
   const el = document.getElementById('youLevel'); if(!el) return;
