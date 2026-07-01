@@ -152,6 +152,9 @@
   .achieve-t{font-weight:800; font-size:14px; margin-bottom:3px}
   .achieve.locked .achieve-t{color:var(--dim)}
   .achieve-d{font-size:11.5px; color:var(--faint); line-height:1.35}
+  .pf-badge-count{font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--good); background:rgba(61,220,151,.12); padding:1px 8px; border-radius:6px; margin-left:6px; vertical-align:middle}
+  .pf-badges{display:flex; flex-wrap:wrap; gap:8px; justify-content:center}
+  .pf-badge{display:inline-flex; align-items:center; gap:5px; font-size:13px; font-weight:700; background:var(--surface-2); border:1px solid var(--border-2); border-radius:999px; padding:6px 13px}
   .mem-count{font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--faint); font-weight:600; margin-left:4px}
   .members{display:flex; flex-direction:column; gap:2px; max-height:340px; overflow-y:auto; margin:0 -4px; padding:0 4px}
   .mem-row{display:flex; align-items:center; gap:9px; padding:6px 7px; border-radius:9px; cursor:pointer; transition:background .12s}
@@ -1870,6 +1873,7 @@ async function openAchievements(){
   try{ const { data } = await sb.rpc('my_stats'); s = data || {}; }catch(e){}
   const unlocked = ACHIEVEMENTS.filter(a => a.check(s));
   if(cnt) cnt.textContent = unlocked.length + ' / ' + ACHIEVEMENTS.length;
+  try{ localStorage.setItem('lineup_ach_seen', JSON.stringify(unlocked.map(a => a.id))); }catch(e){}
   grid.innerHTML = ACHIEVEMENTS.map(a=>{
     const got = a.check(s);
     return `<div class="achieve ${got?'got':'locked'}">
@@ -1880,6 +1884,26 @@ async function openAchievements(){
   }).join('');
 }
 function closeAchievements(){ const m = document.getElementById('achieveModal'); if(m) m.style.display='none'; lockScroll(false); }
+let _achCheckAt = 0;
+async function checkNewAchievements(force){
+  if(!me) return;
+  const now = Date.now();
+  if(!force && now - _achCheckAt < 45000) return;
+  _achCheckAt = now;
+  let s = {};
+  try{ const { data } = await sb.rpc('my_stats'); s = data || {}; }catch(e){ return; }
+  const unlocked = ACHIEVEMENTS.filter(a => a.check(s)).map(a => a.id);
+  let seen = [];
+  const hadSeen = !!localStorage.getItem('lineup_ach_seen');
+  try{ seen = JSON.parse(localStorage.getItem('lineup_ach_seen') || '[]'); }catch(e){}
+  const newly = unlocked.filter(id => !seen.includes(id));
+  try{ localStorage.setItem('lineup_ach_seen', JSON.stringify(unlocked)); }catch(e){}
+  if(!hadSeen) return;   // first run: don't spam toasts for already-earned badges
+  newly.forEach((id, i)=>{
+    const a = ACHIEVEMENTS.find(x => x.id === id); if(!a) return;
+    setTimeout(()=> toast('Achievement unlocked: <b>' + esc(a.name) + '</b>', a.icon), 700 + i * 1500);
+  });
+}
 
 // ---- leveling (based on lifetime points earned) ----
 function levelInfo(total){
@@ -2188,6 +2212,7 @@ async function finishWatch(handle){
     renderLeaderboard();
     toast(`You showed up for <b>${item ? (item.name||handle) : handle}</b>`, '+10');
     render();
+    checkNewAchievements(false);
   }catch(e){
     showBanner('warn', "Couldn't save those points — try again in a moment.");
   }
@@ -2497,8 +2522,9 @@ let viewingProfile = null;   // login currently being viewed
 let currentProfile = undefined;  // undefined=loading, null=not found, object=loaded
 let editingProfile = false;
 let profilePosts = [];
+let profileStats = {};
 let editLayout = null;   // working copy of section order while editing
-const SECTION_LABELS = { stats:'Points & level', bio:'About', links:'Links', wall:'Wall' };
+const SECTION_LABELS = { stats:'Points & level', badges:'Achievements', bio:'About', links:'Links', wall:'Wall' };
 let playerTracks = [];
 let playerIndex = 0;
 function profileTracks(p){
@@ -2515,7 +2541,7 @@ function playerRenderEmbed(){
 function playerNext(){ if(!playerTracks.length) return; playerIndex = (playerIndex + 1) % playerTracks.length; playerRenderEmbed(); }
 function playerPrev(){ if(!playerTracks.length) return; playerIndex = (playerIndex - 1 + playerTracks.length) % playerTracks.length; playerRenderEmbed(); }
 function normLayout(saved){
-  const keys = ['stats','bio','links','wall'];
+  const keys = ['stats','badges','bio','links','wall'];
   let arr = Array.isArray(saved) ? saved.filter(x => x && keys.includes(x.k)) : [];
   const seen = {}; arr = arr.filter(x => seen[x.k] ? false : (seen[x.k] = true));
   keys.forEach((k, idx) => { if(!arr.find(x => x.k === k)) arr.splice(Math.min(idx, arr.length), 0, { k, show:true }); });
@@ -2716,7 +2742,11 @@ async function loadProfile(handle){
     if(!data || !data.length){ const r2 = await sb.from('profiles').select(cols).ilike('twitch_login', handle).limit(1); data = r2.data; }
     currentProfile = (data && data[0]) ? data[0] : null;
   }catch(e){ currentProfile = null; }
-  if(currentProfile) await loadPosts();
+  if(currentProfile){
+    try{ const { data: st } = await sb.rpc('user_stats', { p_username: currentProfile.username || handle }); profileStats = st || {}; }
+    catch(e){ profileStats = {}; }
+    await loadPosts();
+  }
   renderProfile();
 }
 async function loadPosts(){
@@ -2921,6 +2951,7 @@ async function addPost(){
     await loadPosts();
     refreshWall();   // updates only the wall, so music keeps playing
     toast('Posted', '✓');
+    checkNewAchievements(true);
   }catch(e){ if(btn){ btn.disabled = false; btn.textContent = 'Post'; } toast("Couldn't post — try again", '✕'); }
 }
 async function toggleLike(id){
@@ -2984,7 +3015,7 @@ async function featureUser(username){
     state.points = data.points;
     updatePointsDisplay();
     renderLeaderboard();
-    toast('⭐ You featured <b>' + esc(name) + '</b> for 1 hour!', '⭐');
+    toast('⭐ You featured <b>' + esc(name) + '</b> for 1 hour!', '⭐'); checkNewAchievements(true);
   }catch(e){ toast("Couldn't feature — try again", '✕'); }
 }
 function renderTools(){
@@ -3025,6 +3056,7 @@ async function afterLoginReferral(){
   renderReferral();
   renderTrain();
   const ab = document.getElementById('achieveBtn'); if(ab) ab.style.display = (me && me.username) ? 'block' : 'none';
+  checkNewAchievements(true);
 }
 function renderTrain(){
   const panel = document.getElementById('trainPanel');
@@ -3074,7 +3106,7 @@ async function joinTrain(on){
     if(error){ toast("Couldn't update — try again", '✕'); return; }
     me.in_train = !!on;
     renderTrain();
-    toast(on ? 'You joined the raid train!' : 'Left the raid train', on ? '🚂' : 'ℹ');
+    toast(on ? 'You joined the raid train!' : 'Left the raid train', on ? '🚂' : 'ℹ'); if(on) checkNewAchievements(true);
     if(on && !state.listed) showBanner('info', 'Tip: go live and hit "Go live" so you show up in the train while streaming.');
   }catch(e){ toast("Couldn't update — try again", '✕'); }
 }
@@ -3090,7 +3122,7 @@ async function confirmRaid(){
     }
     setPoints(data.points);
     updatePointsDisplay();
-    toast('Raid logged — nice! +10 points', '🚂');
+    toast('Raid logged — nice! +10 points', '🚂'); checkNewAchievements(true);
   }catch(e){ toast("Couldn't log that — try again", '✕'); }
 }
 function renderYouLevel(){
@@ -3350,6 +3382,12 @@ function renderProfile(){
         <div class="pf-stat pf-lvl">${levelBadge(p.total_earned||0)}<span>level</span></div>
       </div></div>`,
     bio: p.bio ? `<div class="pf-section-t">About</div><div class="pf-bio">${esc(p.bio)}</div>` : '',
+    badges: (()=>{
+      const earned = ACHIEVEMENTS.filter(a => a.check(profileStats || {}));
+      if(!earned.length) return '';
+      return `<div class="pf-section-t">Achievements <span class="pf-badge-count">${earned.length}</span></div><div class="pf-badges">`
+        + earned.map(a => `<span class="pf-badge" title="${esc(a.desc)}">${a.icon} ${esc(a.name)}</span>`).join('') + `</div>`;
+    })(),
     links: (twitchLink || kickLink || linkBtns) ? `<div class="pf-section-t">Find me on</div><div class="pf-links">${twitchLink}${kickLink}${linkBtns}</div>` : '',
     wall: '<div id="pfWall">' + wallHtml(owner) + '</div>'
   };
