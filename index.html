@@ -142,6 +142,16 @@
   .train-raid-btn:hover{filter:brightness(1.08)}
   .train-confirm{width:100%; margin-top:9px; background:var(--good); color:#08130d; border:none; font-weight:700; font-size:13px; padding:9px; border-radius:9px; cursor:pointer}
   .train-confirm:hover{filter:brightness(1.06)}
+  .achieve-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:10px; margin-top:4px}
+  .achieve{background:var(--surface-2); border:1px solid var(--border); border-radius:13px; padding:15px 12px; text-align:center; transition:transform .12s}
+  .achieve.got{border-color:var(--border-2)}
+  .achieve.got:hover{transform:translateY(-2px)}
+  .achieve.locked{opacity:.5}
+  .achieve-ic{font-size:30px; line-height:1; margin-bottom:8px}
+  .achieve.locked .achieve-ic{filter:grayscale(1)}
+  .achieve-t{font-weight:800; font-size:14px; margin-bottom:3px}
+  .achieve.locked .achieve-t{color:var(--dim)}
+  .achieve-d{font-size:11.5px; color:var(--faint); line-height:1.35}
   .mem-count{font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--faint); font-weight:600; margin-left:4px}
   .members{display:flex; flex-direction:column; gap:2px; max-height:340px; overflow-y:auto; margin:0 -4px; padding:0 4px}
   .mem-row{display:flex; align-items:center; gap:9px; padding:6px 7px; border-radius:9px; cursor:pointer; transition:background .12s}
@@ -810,6 +820,7 @@
         </div>
         <div class="you-level" id="youLevel" style="display:none"></div>
         <button class="mypage-btn" id="myPageBtn" style="display:none" onclick="if(me)openProfile(me.username || me.login)">View &amp; edit my page →</button>
+        <button class="mypage-btn" id="achieveBtn" style="display:none" onclick="openAchievements()">🏆 My achievements</button>
         <button class="mypage-btn admin-open-btn" id="adminBtn" style="display:none" onclick="openAdmin()">⚑ Review reports</button>
       </div>
 
@@ -900,6 +911,13 @@
       <span class="fb-count" id="ageErr"></span>
       <button class="fb-submit" id="ageSubmit" onclick="submitAge()">Continue</button>
     </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="achieveModal" onclick="if(event.target===this)closeAchievements()">
+  <div class="modal">
+    <div class="admin-head"><b>🏆 Achievements <span id="achieveCount" style="color:var(--dim); font-weight:600; font-size:13px"></span></b><button class="music-close" style="position:static" onclick="closeAchievements()" aria-label="Close">✕</button></div>
+    <div class="achieve-grid" id="achieveGrid"></div>
   </div>
 </div>
 
@@ -1825,6 +1843,44 @@ function showBanner(kind, html){
 
 // deterministic color from a string -> hue
 function hue(str){let h=0; for(const c of str) h=(h*31+c.charCodeAt(0))%360; return h;}
+// ---- leveling (based on lifetime points earned) ----
+const ACHIEVEMENTS = [
+  { id:'welcome',  icon:'👋', name:'Welcome aboard', desc:'Join the Lineup community', check:()=>true },
+  { id:'bio',      icon:'📝', name:'All set up',      desc:'Write a bio on your page',      check:s=>!!s.has_bio },
+  { id:'poster',   icon:'💬', name:'Say hello',       desc:'Post on a wall',                check:s=>(s.posts||0)>=1 },
+  { id:'p100',     icon:'⚡', name:'Getting started', desc:'Earn 100 points',               check:s=>(s.total_earned||0)>=100 },
+  { id:'p500',     icon:'🔥', name:'Regular',         desc:'Earn 500 points',               check:s=>(s.total_earned||0)>=500 },
+  { id:'p1000',    icon:'💎', name:'Veteran',         desc:'Earn 1,000 points',             check:s=>(s.total_earned||0)>=1000 },
+  { id:'lvl5',     icon:'⭐', name:'Rising star',     desc:'Reach level 5',                 check:s=>levelInfo(s.total_earned||0).level>=5 },
+  { id:'lvl10',    icon:'👑', name:'Lineup legend',   desc:'Reach level 10',                check:s=>levelInfo(s.total_earned||0).level>=10 },
+  { id:'feat',     icon:'🌟', name:'Spotlight',       desc:'Get featured by someone',       check:s=>(s.times_featured||0)>=1 },
+  { id:'generous', icon:'🎁', name:'Generous',        desc:'Feature another streamer',      check:s=>(s.gifts_given||0)>=1 },
+  { id:'train',    icon:'🚂', name:'All aboard',      desc:'Join the raid train',           check:s=>!!s.in_train },
+  { id:'ref1',     icon:'🤝', name:'Recruiter',       desc:'Refer a friend to Lineup',      check:s=>(s.referrals||0)>=1 },
+  { id:'ref5',     icon:'📣', name:'Community builder',desc:'Refer 5 friends',              check:s=>(s.referrals||0)>=5 },
+];
+async function openAchievements(){
+  const modal = document.getElementById('achieveModal');
+  const grid = document.getElementById('achieveGrid');
+  const cnt = document.getElementById('achieveCount');
+  if(!modal) return;
+  grid.innerHTML = '<div class="rail-note" style="padding:20px">Loading…</div>';
+  modal.style.display = 'flex'; lockScroll(true);
+  let s = {};
+  try{ const { data } = await sb.rpc('my_stats'); s = data || {}; }catch(e){}
+  const unlocked = ACHIEVEMENTS.filter(a => a.check(s));
+  if(cnt) cnt.textContent = unlocked.length + ' / ' + ACHIEVEMENTS.length;
+  grid.innerHTML = ACHIEVEMENTS.map(a=>{
+    const got = a.check(s);
+    return `<div class="achieve ${got?'got':'locked'}">
+      <div class="achieve-ic">${got ? a.icon : '🔒'}</div>
+      <div class="achieve-t">${a.name}</div>
+      <div class="achieve-d">${a.desc}</div>
+    </div>`;
+  }).join('');
+}
+function closeAchievements(){ const m = document.getElementById('achieveModal'); if(m) m.style.display='none'; lockScroll(false); }
+
 // ---- leveling (based on lifetime points earned) ----
 function levelInfo(total){
   total = Math.max(0, total || 0);
@@ -2968,6 +3024,7 @@ async function afterLoginReferral(){
   try{ await sb.rpc('try_pay_referral'); }catch(e){}
   renderReferral();
   renderTrain();
+  const ab = document.getElementById('achieveBtn'); if(ab) ab.style.display = (me && me.username) ? 'block' : 'none';
 }
 function renderTrain(){
   const panel = document.getElementById('trainPanel');
