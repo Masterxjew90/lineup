@@ -120,6 +120,12 @@
   .me-chip-go{display:flex; align-items:center; gap:9px; cursor:pointer; border-radius:999px; padding:2px 4px 2px 2px}
   .me-chip-go:hover{background:var(--surface-3)}
   .me-chip-go:hover .mn{color:var(--accent)}
+  .refer-amt{font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--good); font-weight:700; background:rgba(61,220,151,.12); padding:2px 7px; border-radius:6px; float:right}
+  .refer-link-row{display:flex; gap:7px; margin-bottom:9px}
+  .refer-link-row input{flex:1; min-width:0; background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:8px 10px; color:var(--text); font-size:11.5px; font-family:'JetBrains Mono',monospace}
+  .refer-link-row button{background:var(--accent); color:#fff; border:none; font-weight:700; font-size:12px; padding:8px 13px; border-radius:8px; cursor:pointer}
+  .refer-link-row button:hover{filter:brightness(1.08)}
+  .refer-count{font-size:12px; color:var(--dim); font-weight:600}
   .mem-count{font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--faint); font-weight:600; margin-left:4px}
   .members{display:flex; flex-direction:column; gap:2px; max-height:340px; overflow-y:auto; margin:0 -4px; padding:0 4px}
   .mem-row{display:flex; align-items:center; gap:9px; padding:6px 7px; border-radius:9px; cursor:pointer; transition:background .12s}
@@ -802,6 +808,16 @@
         <button class="boost-btn" onclick="openOverlayModal()">Get my overlay link</button>
       </div>
 
+      <div class="panel" id="referPanel" style="display:none">
+        <h3>Invite &amp; earn <span class="refer-amt">+50 pts</span></h3>
+        <p class="rail-note" style="margin:0 0 10px">Share your link — earn <b>50 points</b> when a friend joins and gets active on Lineup.</p>
+        <div class="refer-link-row">
+          <input id="referLink" readonly>
+          <button onclick="copyReferLink()">Copy</button>
+        </div>
+        <div class="refer-count" id="referCount"></div>
+      </div>
+
       <div class="panel" id="collabPanel" style="display:none">
         <h3>Collab <span class="collab-amt">+20 each</span></h3>
         <div id="collabBody"></div>
@@ -1153,7 +1169,7 @@ async function afterConnectLite(user, twitchLinked){
     await syncProfileLite();
     try{ await sb.rpc('sync_verifications'); }catch(e){}
     await loadUsername();
-    renderTools(); renderYouLevel();
+    renderTools(); renderYouLevel(); afterLoginReferral();
     await loadPointsLite();
     renderLeaderboard();
     await renderLiteHub(twitchLinked);
@@ -1214,7 +1230,7 @@ async function afterConnectTwitch(){
     await syncProfile();
     try{ await sb.rpc('sync_verifications'); }catch(e){}
     await loadUsername();
-    renderTools(); renderYouLevel();
+    renderTools(); renderYouLevel(); afterLoginReferral();
     await loadMyState();
     await loadFollowing();
 
@@ -1258,10 +1274,11 @@ async function loadUsername(){
   const uid = authUid;
   if(!uid){ me.username = null; return; }
   try{
-    const { data } = await sb.from('profiles').select('username, kick_slug, display_name, avatar, total_earned').eq('id', uid).limit(1);
+    const { data } = await sb.from('profiles').select('username, kick_slug, display_name, avatar, total_earned, referral_count').eq('id', uid).limit(1);
     me.username = (data && data[0] && data[0].username) ? data[0].username : null;
     me.kick_slug = (data && data[0] && data[0].kick_slug) ? data[0].kick_slug : null;
     me.total_earned = (data && data[0] && data[0].total_earned) || 0;
+    me.referral_count = (data && data[0] && data[0].referral_count) || 0;
     if(data && data[0] && data[0].display_name) me.display_name = data[0].display_name;
     if(data && data[0] && data[0].avatar) me.profile_image_url = data[0].avatar;
   }catch(e){ me.username = null; }
@@ -1302,6 +1319,16 @@ async function claimUsername(){
       document.getElementById('userModal').style.display = 'none';
       if(document.getElementById('profile').style.display !== 'block') lockScroll(false);
       renderTools(); renderYouLevel();
+      // record who referred this new member, then see if the referrer can be paid yet
+      try{
+        const ref = localStorage.getItem('lineup_ref');
+        if(ref){
+          await sb.rpc('set_referrer', { p_ref_username: ref });
+          localStorage.removeItem('lineup_ref');
+          try{ await sb.rpc('try_pay_referral'); }catch(e){}
+        }
+      }catch(e){}
+      renderReferral();
       toast('Welcome, @' + data.username, '✓');
     } else {
       const err = data && data.error;
@@ -2892,6 +2919,30 @@ function setPoints(newBal){
   }
   state.points = newBal;
 }
+function renderReferral(){
+  const panel = document.getElementById('referPanel');
+  if(!panel) return;
+  if(!(me && me.username)){ panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  const link = document.getElementById('referLink');
+  if(link) link.value = location.origin + location.pathname + '?ref=' + encodeURIComponent(me.username);
+  const cnt = document.getElementById('referCount');
+  if(cnt){
+    const n = me.referral_count || 0;
+    cnt.textContent = n ? ('🎉 ' + n + ' friend' + (n===1?'':'s') + ' joined through you') : 'No referrals yet — share your link!';
+  }
+}
+function copyReferLink(){
+  const inp = document.getElementById('referLink'); if(!inp) return;
+  inp.select(); inp.setSelectionRange(0, 99999);
+  const done = ()=>toast('Invite link copied — share it anywhere', '📋');
+  if(navigator.clipboard){ navigator.clipboard.writeText(inp.value).then(done).catch(()=>{ document.execCommand('copy'); done(); }); }
+  else { document.execCommand('copy'); done(); }
+}
+async function afterLoginReferral(){
+  try{ await sb.rpc('try_pay_referral'); }catch(e){}
+  renderReferral();
+}
 function renderYouLevel(){
   const el = document.getElementById('youLevel'); if(!el) return;
   if(!me || me.total_earned == null){ el.style.display = 'none'; return; }
@@ -3343,6 +3394,14 @@ sb.auth.onAuthStateChange((event, session)=>{
 // deep link: /?u=username opens that creator's page
 const initU = new URLSearchParams(location.search).get('u');
 if(initU) showProfile(initU, false);
+
+// referral capture: /?ref=username — remember who invited this visitor
+try{
+  const initRef = new URLSearchParams(location.search).get('ref');
+  if(initRef && /^[a-z0-9_]{3,25}$/i.test(initRef) && !localStorage.getItem('lineup_ref')){
+    localStorage.setItem('lineup_ref', initRef.toLowerCase());
+  }
+}catch(e){}
 
 // if nobody is logged in, prompt to connect
 setTimeout(()=>{
