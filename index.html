@@ -166,6 +166,20 @@
   .share-native{background:var(--accent); color:#fff}
   .share-copy{background:var(--surface-3); color:var(--text); border:1px solid var(--border)!important}
   .share-actions button:hover{filter:brightness(1.1)}
+  .welcome-modal{max-width:480px}
+  .wel-head{text-align:center; margin-bottom:20px}
+  .wel-logo{font-family:'Bricolage Grotesque',sans-serif; font-weight:800; font-size:38px; letter-spacing:-.02em}
+  .wel-logo span{color:var(--accent)}
+  .wel-sub{font-size:14px; color:var(--dim); margin-top:4px}
+  .wel-rows{display:flex; flex-direction:column; gap:14px; margin-bottom:20px}
+  .wel-row{display:flex; gap:13px; align-items:flex-start}
+  .wel-ic{font-size:24px; line-height:1.2; flex-shrink:0; width:30px; text-align:center}
+  .wel-tx b{font-size:14.5px; font-weight:700; display:block; margin-bottom:2px}
+  .wel-tx p{font-size:13px; color:var(--dim); line-height:1.45; margin:0}
+  .wel-cta{width:100%; background:linear-gradient(135deg,#FF5C39,#FF3B7C); color:#fff; border:none; font-weight:800; font-size:15px; padding:13px; border-radius:12px; cursor:pointer}
+  .wel-cta:hover{filter:brightness(1.08)}
+  .how-more{width:100%; margin-top:11px; background:var(--surface-2); border:1px solid var(--border); color:var(--text); font-weight:600; font-size:12.5px; padding:9px; border-radius:9px; cursor:pointer}
+  .how-more:hover{border-color:var(--border-2)}
   .mem-count{font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--faint); font-weight:600; margin-left:4px}
   .members{display:flex; flex-direction:column; gap:2px; max-height:340px; overflow-y:auto; margin:0 -4px; padding:0 4px}
   .mem-row{display:flex; align-items:center; gap:9px; padding:6px 7px; border-radius:9px; cursor:pointer; transition:background .12s}
@@ -895,6 +909,7 @@
           <li><span class="k">+20</span><span>Collab with another live member</span></li>
         </ul>
         <div class="rail-note" style="margin-top:10px">Points reward genuine discovery and showing up — never buying follows. That's what keeps the whole thing safe under Twitch's rules.</div>
+        <button class="how-more" onclick="showWelcome()">See how Lineup works →</button>
       </div>
     </aside>
   </div>
@@ -926,6 +941,23 @@
       <span class="fb-count" id="ageErr"></span>
       <button class="fb-submit" id="ageSubmit" onclick="submitAge()">Continue</button>
     </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="welcomeModal" onclick="if(event.target===this)closeWelcome()">
+  <div class="modal welcome-modal">
+    <div class="wel-head">
+      <div class="wel-logo">Line<span>up</span></div>
+      <div class="wel-sub">Get discovered. Support small streamers. Free.</div>
+    </div>
+    <div class="wel-rows">
+      <div class="wel-row"><span class="wel-ic">🔴</span><div class="wel-tx"><b>Discover live streamers</b><p>Find the smallest creators live right now on Twitch &amp; Kick — the ones the big sites bury.</p></div></div>
+      <div class="wel-row"><span class="wel-ic">⚡</span><div class="wel-tx"><b>Earn points &amp; level up</b><p>Watch and support streamers for real to earn points and climb the community ranks.</p></div></div>
+      <div class="wel-row"><span class="wel-ic">⭐</span><div class="wel-tx"><b>Get featured</b><p>Spend points to boost yourself — or another streamer you love — up the lineup.</p></div></div>
+      <div class="wel-row"><span class="wel-ic">🚂</span><div class="wel-tx"><b>Ride the raid train</b><p>Join the community train and pass your viewers down the line. Everyone grows together.</p></div></div>
+      <div class="wel-row"><span class="wel-ic">🎨</span><div class="wel-tx"><b>Build your page</b><p>Customize your profile, link every platform, add your tip jar, and get found.</p></div></div>
+    </div>
+    <button class="wel-cta" onclick="closeWelcome()">Let's go →</button>
   </div>
 </div>
 
@@ -3090,6 +3122,8 @@ async function afterLoginReferral(){
   const sb2 = document.getElementById('shareBtn'); if(sb2) sb2.style.display = (me && me.username) ? 'block' : 'none';
   checkNewAchievements(true);
 }
+function showWelcome(){ const m = document.getElementById('welcomeModal'); if(m){ m.style.display = 'flex'; lockScroll(true); } }
+function closeWelcome(){ const m = document.getElementById('welcomeModal'); if(m) m.style.display = 'none'; lockScroll(false); try{ localStorage.setItem('lineup_welcomed', '1'); }catch(e){} }
 const SHARE_PRESETS = [
   '🔴 Live now! Come hang out — and discover more small streamers on Lineup 👇',
   "I'm on Lineup — where small streamers actually get discovered. Come find me 👇",
@@ -3646,6 +3680,11 @@ sb.auth.onAuthStateChange((event, session)=>{
 // deep link: /?u=username opens that creator's page
 const initU = new URLSearchParams(location.search).get('u');
 if(initU) showProfile(initU, false);
+
+// first-time welcome (once per device, and not when deep-linked to a profile)
+if(!initU){
+  try{ if(!localStorage.getItem('lineup_welcomed')) setTimeout(showWelcome, 900); }catch(e){}
+}
 
 // referral capture: /?ref=username — remember who invited this visitor
 try{
