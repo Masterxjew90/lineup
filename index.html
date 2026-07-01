@@ -2320,7 +2320,7 @@ async function loadLineup(){
   let members = [];
   try{
     const { data } = await sb.from('profiles')
-      .select('twitch_login, display_name, avatar, points, listed_at, feat_remaining_secs, feat_running_since, username, kick_slug')
+      .select('twitch_login, display_name, avatar, points, listed_at, feat_remaining_secs, feat_running_since, username, kick_slug, in_train')
       .not('listed_at', 'is', null)
       .eq('hidden', false)
       .order('points', { ascending:false })
@@ -2347,7 +2347,7 @@ async function loadLineup(){
   let twCards = liveStreams.map(s => {
     const c = mapStream(s, avatars);
     const mem = memByLogin[s.user_login.toLowerCase()];
-    c.featured = isFeat(mem); if(mem) c.username = mem.username;
+    c.featured = isFeat(mem); if(mem){ c.username = mem.username; c.inTrain = !!mem.in_train; }
     return c;
   });
 
@@ -2384,7 +2384,7 @@ function mapKickStream(m, info, featured){
     title: info.title || 'Live on Kick', game: info.category || 'Live', cat: info.category || 'Live',
     platform: 'kick', viewers: info.viewers || 0, lang: '', mature: false, tags: [],
     thumb: info.thumbnail || '', avatar: m.avatar || null,
-    url: 'https://kick.com/' + String(slug || '').replace(/_/g, '-'), username: m.username, featured: !!featured,
+    url: 'https://kick.com/' + String(slug || '').replace(/_/g, '-'), username: m.username, featured: !!featured, inTrain: !!m.in_train,
   };
 }
 function renderOffline(){
