@@ -190,6 +190,7 @@ function load(){
     apiKey = localStorage.getItem('pt_key') || '';
     game = localStorage.getItem('pt_game') || 'pokemon';
     pulled = JSON.parse(localStorage.getItem('pt_pulled') || '[]');
+    pulled.forEach(c => { if(c && typeof c.set !== 'string') c.set = ''; });
   }catch(e){ pulled = []; }
 }
 
@@ -235,6 +236,14 @@ function extractPrice(card){
   return null;
 }
 const money = n => '$' + (Number(n)||0).toFixed(2);
+// set can come back as a string OR an object ({name/code}); always return a string
+function setName(c){
+  if(!c) return '';
+  if(typeof c.set_name === 'string') return c.set_name;
+  if(c.set && typeof c.set === 'object') return c.set.name || c.set.set_name || c.set.code || '';
+  if(typeof c.set === 'string') return c.set;
+  return '';
+}
 
 // ---- search ----
 document.getElementById('search').addEventListener('input', function(){
@@ -268,11 +277,11 @@ function renderResults(cards){
     const p = extractPrice(c);
     window._res = window._res || {};
     const key = 'r' + i;
-    window._res[key] = { id:c.id, name:c.name, set:c.set_name || c.set || '', price:p };
+    window._res[key] = { id:c.id, name:c.name, set:setName(c), price:p };
     return `<div class="res" onclick="addCard('${key}')">
       <div class="res-main">
         <div class="res-name">${esc(c.name || 'Unknown')}${c.rarity ? ' · ' + esc(c.rarity) : ''}</div>
-        <div class="res-set">${esc(c.set_name || c.set || '')}</div>
+        <div class="res-set">${esc(setName(c))}</div>
       </div>
       <div class="res-price ${p==null?'none':''}">${p==null ? 'no price' : money(p)}</div>
     </div>`;
@@ -418,7 +427,7 @@ async function lookupFromScan(text, conf){
     const sim = nameSim(text, top.name || '');
     if(conf >= 55 && sim >= 0.5){
       const p = extractPrice(top);
-      pulled.unshift({ id:top.id, name:top.name, set:top.set_name || top.set || '', price:p, game });
+      pulled.unshift({ id:top.id, name:top.name, set:setName(top), price:p, game });
       save(); render();
       setScanStatus('✓ Added <b>' + esc(top.name) + '</b>' + (p==null ? ' (no price)' : ' · ' + money(p)) + ' — scan the next card.');
     } else {
@@ -441,8 +450,8 @@ function renderScanCandidates(cards, text){
   window._res = {};
   const rows = cards.map((c, i) => {
     const p = extractPrice(c);
-    window._res['s' + i] = { id:c.id, name:c.name, set:c.set_name || c.set || '', price:p };
-    return `<button class="scan-cand" onclick="pickScan('s${i}')"><span>${esc(c.name)}${c.rarity ? ' · ' + esc(c.rarity) : ''}<br><span class="sc-set">${esc(c.set_name || c.set || '')}</span></span><b>${p==null ? '—' : money(p)}</b></button>`;
+    window._res['s' + i] = { id:c.id, name:c.name, set:setName(c), price:p };
+    return `<button class="scan-cand" onclick="pickScan('s${i}')"><span>${esc(c.name)}${c.rarity ? ' · ' + esc(c.rarity) : ''}<br><span class="sc-set">${esc(setName(c))}</span></span><b>${p==null ? '—' : money(p)}</b></button>`;
   }).join('');
   setScanStatus('Read <b>"' + esc(text) + '"</b> — not sure which, pick one:<div class="scan-cands">' + rows + '</div>');
 }
