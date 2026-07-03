@@ -1032,6 +1032,21 @@
         <li>Add a panel, upload the image, and set its <b>link</b> to the URL above.</li>
       </ol>
     </div>
+
+    <div class="pf-section-t" style="margin:22px 0 8px">🃏 Pack Tracker — live pack value for Pokémon, Magic, Yu-Gi-Oh! &amp; One Piece</div>
+    <p class="rail-note" style="margin:0 0 8px">Opening card packs on stream? Track each card's price and a live running total on screen. Free — you'll grab your own free price-API key inside the tool (takes a minute, 200 lookups/day).</p>
+    <div class="overlay-link-row">
+      <input id="tcgLink" readonly>
+      <button onclick="copyOverlayLink('tcgLink')">Copy</button>
+    </div>
+    <div class="overlay-steps">
+      <b>How to use it on stream:</b>
+      <ol>
+        <li>Open the link, hit <b>⚙ API key</b>, and paste a free key from <b>tcgpricelookup.com</b>.</li>
+        <li>In OBS, add it as a <b>Browser</b> source (or Window Capture), around <b>640×760</b>.</li>
+        <li>Pick the game and search each card as you pull it — the total updates live.</li>
+      </ol>
+    </div>
   </div>
 </div>
 
@@ -3247,6 +3262,7 @@ function openOverlayModal(){
   document.getElementById('overlayLink').value = overlayLinkFor(me.username, 'overlay.html');
   document.getElementById('levelLink').value = overlayLinkFor(me.username, 'level.html');
   document.getElementById('panelLink').value = location.origin + location.pathname + '?u=' + encodeURIComponent(me.username);
+  document.getElementById('tcgLink').value = location.href.split('?')[0].split('#')[0].replace(/[^/]*$/, '') + 'tcg-tracker.html';
   document.getElementById('overlayModal').style.display = 'flex';
   lockScroll(true);
   drawTwitchPanel();
