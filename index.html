@@ -360,7 +360,15 @@
   .fb-btn:hover{background:var(--surface-3); color:var(--text)}
   .fb-btn.done{color:var(--good); border-color:rgba(61,220,151,.4); background:rgba(61,220,151,.1); cursor:default}
   .modal-bg{display:none; position:fixed; inset:0; background:rgba(0,0,0,.62); backdrop-filter:blur(3px); z-index:300; align-items:center; justify-content:center; padding:20px}
-  .modal{background:var(--surface); border:1px solid var(--border-2); border-radius:16px; padding:22px; width:100%; max-width:460px; position:relative; box-shadow:0 24px 70px rgba(0,0,0,.5); animation:rise .2s ease}
+  .modal{background:var(--surface); border:1px solid var(--border-2); border-radius:16px; padding:22px; width:100%; max-width:460px; max-height:calc(100vh - 40px); overflow-y:auto; position:relative; box-shadow:0 24px 70px rgba(0,0,0,.5); animation:rise .2s ease}
+  .tool-acc{border:1px solid var(--border); border-radius:12px; margin-bottom:10px; background:var(--surface-2); overflow:hidden}
+  .tool-acc summary{list-style:none; cursor:pointer; padding:13px 15px; font-weight:700; font-size:14px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; user-select:none}
+  .tool-acc summary::-webkit-details-marker{display:none}
+  .tool-acc summary::after{content:'▸'; margin-left:auto; color:var(--faint); font-size:12px; transition:transform .15s}
+  .tool-acc[open] summary::after{transform:rotate(90deg)}
+  .tool-acc summary:hover{background:var(--surface-3)}
+  .acc-hint{font-weight:500; font-size:12px; color:var(--faint); flex-basis:100%}
+  .acc-body{padding:4px 15px 15px}
   .modal h3{font-family:'Bricolage Grotesque',sans-serif; font-size:18px; font-weight:700; letter-spacing:-.01em; margin-bottom:6px; padding-right:30px}
   .modal-x{position:absolute; top:13px; right:13px; color:var(--faint); width:30px; height:30px; border-radius:8px; font-size:14px}
   .modal-x:hover{background:var(--surface-3); color:var(--text)}
@@ -995,58 +1003,79 @@
 
 <div class="modal-bg" id="overlayModal" onclick="if(event.target===this)closeOverlayModal()">
   <div class="modal">
-    <div class="admin-head"><b>Your stream overlay 🎥</b><button class="music-close" style="position:static" onclick="closeOverlayModal()" aria-label="Close">✕</button></div>
-    <p class="rail-note" style="margin:0 0 12px">Add these as a <b>Browser source</b> in OBS or Streamlabs. They appear on your stream and stay hidden when there's nothing to show.</p>
-    <div class="pf-section-t" style="margin:0 0 7px">⭐ Featured badge — shows when you're featured + who boosted you</div>
-    <div class="overlay-link-row">
-      <input id="overlayLink" readonly>
-      <button onclick="copyOverlayLink('overlayLink')">Copy</button>
-    </div>
-    <div class="pf-section-t" style="margin:16px 0 7px">📊 Level badge — your supporter level + progress bar</div>
-    <div class="overlay-link-row">
-      <input id="levelLink" readonly>
-      <button onclick="copyOverlayLink('levelLink')">Copy</button>
-    </div>
-    <div class="overlay-steps">
-      <b>How to add either one in OBS:</b>
-      <ol>
-        <li>Under <b>Sources</b>, click <b>+</b> → <b>Browser</b>.</li>
-        <li>Paste a link above into the <b>URL</b> field.</li>
-        <li>Set width <b>440</b>, height <b>320</b> → <b>OK</b>.</li>
-        <li>Drag it wherever you like on your layout.</li>
-      </ol>
-    </div>
+    <div class="admin-head"><b>Your stream tools 🎥</b><button class="music-close" style="position:static" onclick="closeOverlayModal()" aria-label="Close">✕</button></div>
+    <p class="rail-note" style="margin:0 0 14px">Tap a tool to open it. Add the overlays as a <b>Browser source</b> in OBS or Streamlabs — they stay hidden when there's nothing to show.</p>
 
-    <div class="pf-section-t" style="margin:20px 0 8px">🟣 Twitch panel — a Lineup banner for your Twitch profile</div>
-    <canvas id="twPanelCanvas" width="640" height="256" style="width:100%; max-width:320px; border-radius:10px; display:block; margin:0 auto 12px; border:1px solid var(--border)"></canvas>
-    <button class="boost-btn" onclick="downloadTwitchPanel()">⬇ Download panel image (PNG)</button>
-    <div class="overlay-link-row" style="margin-top:10px">
-      <input id="panelLink" readonly>
-      <button onclick="copyOverlayLink('panelLink')">Copy</button>
-    </div>
-    <div class="overlay-steps">
-      <b>How to add it on Twitch:</b>
-      <ol>
-        <li>Download the image above.</li>
-        <li>On your Twitch channel page, scroll down and turn on <b>Edit Panels</b>.</li>
-        <li>Add a panel, upload the image, and set its <b>link</b> to the URL above.</li>
-      </ol>
-    </div>
+    <details class="tool-acc" open>
+      <summary>⭐ Featured badge <span class="acc-hint">shows when you're featured + who boosted you</span></summary>
+      <div class="acc-body">
+        <div class="overlay-link-row">
+          <input id="overlayLink" readonly>
+          <button onclick="copyOverlayLink('overlayLink')">Copy</button>
+        </div>
+        <div class="overlay-steps">
+          <b>Add it in OBS:</b>
+          <ol>
+            <li>Under <b>Sources</b>, click <b>+</b> → <b>Browser</b>.</li>
+            <li>Paste the link above into the <b>URL</b> field.</li>
+            <li>Set width <b>440</b>, height <b>320</b> → <b>OK</b>.</li>
+            <li>Drag it wherever you like on your layout.</li>
+          </ol>
+        </div>
+      </div>
+    </details>
 
-    <div class="pf-section-t" style="margin:22px 0 8px">🃏 Pack Tracker — live pack value for Pokémon, Magic, Yu-Gi-Oh! &amp; One Piece</div>
-    <p class="rail-note" style="margin:0 0 8px">Opening card packs on stream? Track each card's price and a live running total on screen. Free — you'll grab your own free price-API key inside the tool (takes a minute, 200 lookups/day).</p>
-    <div class="overlay-link-row">
-      <input id="tcgLink" readonly>
-      <button onclick="copyOverlayLink('tcgLink')">Copy</button>
-    </div>
-    <div class="overlay-steps">
-      <b>How to use it on stream:</b>
-      <ol>
-        <li>Open the link, hit <b>⚙ API key</b>, and paste a free key from <b>tcgpricelookup.com</b>.</li>
-        <li>In OBS, add it as a <b>Browser</b> source (or Window Capture), around <b>640×760</b>.</li>
-        <li>Pick the game and search each card as you pull it — the total updates live.</li>
-      </ol>
-    </div>
+    <details class="tool-acc">
+      <summary>📊 Level badge <span class="acc-hint">your supporter level + progress bar</span></summary>
+      <div class="acc-body">
+        <div class="overlay-link-row">
+          <input id="levelLink" readonly>
+          <button onclick="copyOverlayLink('levelLink')">Copy</button>
+        </div>
+        <div class="overlay-steps">
+          <b>Add it in OBS:</b> same as above — <b>Browser</b> source, paste the link, size <b>440×320</b>.
+        </div>
+      </div>
+    </details>
+
+    <details class="tool-acc">
+      <summary>🟣 Twitch panel <span class="acc-hint">a Lineup banner for your Twitch profile</span></summary>
+      <div class="acc-body">
+        <canvas id="twPanelCanvas" width="640" height="256" style="width:100%; max-width:320px; border-radius:10px; display:block; margin:0 auto 12px; border:1px solid var(--border)"></canvas>
+        <button class="boost-btn" onclick="downloadTwitchPanel()">⬇ Download panel image (PNG)</button>
+        <div class="overlay-link-row" style="margin-top:10px">
+          <input id="panelLink" readonly>
+          <button onclick="copyOverlayLink('panelLink')">Copy</button>
+        </div>
+        <div class="overlay-steps">
+          <b>Add it on Twitch:</b>
+          <ol>
+            <li>Download the image above.</li>
+            <li>On your channel page, scroll down and turn on <b>Edit Panels</b>.</li>
+            <li>Add a panel, upload the image, and set its <b>link</b> to the URL above.</li>
+          </ol>
+        </div>
+      </div>
+    </details>
+
+    <details class="tool-acc">
+      <summary>🃏 Pack Tracker <span class="acc-hint">live pack value — Pokémon, Magic, Yu-Gi-Oh!, One Piece</span></summary>
+      <div class="acc-body">
+        <p class="rail-note" style="margin:0 0 10px">Opening card packs on stream? Track each card's price and a live running total on screen. Free — grab your own price-API key inside the tool (a minute to set up, 200 lookups/day).</p>
+        <div class="overlay-link-row">
+          <input id="tcgLink" readonly>
+          <button onclick="copyOverlayLink('tcgLink')">Copy</button>
+        </div>
+        <div class="overlay-steps">
+          <b>Use it on stream:</b>
+          <ol>
+            <li>Open the link, hit <b>⚙ API key</b>, and paste a free key from <b>tcgpricelookup.com</b>.</li>
+            <li>In OBS, add it as a <b>Browser</b> source (or Window Capture), around <b>640×760</b>.</li>
+            <li>Pick the game and search each card as you pull it — the total updates live.</li>
+          </ol>
+        </div>
+      </div>
+    </details>
   </div>
 </div>
 
