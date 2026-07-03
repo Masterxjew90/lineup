@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pack Tracker — live TCG pack value</title>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 <style>
   :root{
     --bg:#0e0f13; --surface:#16181f; --surface-2:#1d2029; --border:#282c37; --border-2:#3a3f4d;
@@ -81,6 +82,29 @@
   .item-x:hover{color:var(--accent)}
 
   .foot{margin-top:16px; font-size:11.5px; color:var(--faint); text-align:center; line-height:1.6}
+  /* camera scan */
+  .scan-sec{background:var(--surface); border:1px solid var(--border); border-radius:12px; margin-bottom:14px; overflow:hidden}
+  .scan-sec summary{list-style:none; cursor:pointer; padding:12px 15px; font-weight:700; font-size:14px; display:flex; align-items:center; gap:8px; user-select:none}
+  .scan-sec summary::-webkit-details-marker{display:none}
+  .scan-sec summary::after{content:'▸'; margin-left:auto; color:var(--faint); transition:transform .15s}
+  .scan-sec[open] summary::after{transform:rotate(90deg)}
+  .beta{font-size:10px; font-weight:700; color:var(--gold); background:rgba(255,178,61,.14); padding:1px 6px; border-radius:5px; text-transform:uppercase}
+  .scan-body{padding:0 15px 15px}
+  .cam-wrap{position:relative; border-radius:10px; overflow:hidden; background:#000; margin-bottom:11px; aspect-ratio:4/3}
+  #cam{width:100%; height:100%; object-fit:cover; display:block; transform:scaleX(-1)}
+  .aim{position:absolute; left:9%; top:42%; width:82%; height:16%; border:2px solid var(--gold); border-radius:8px; box-shadow:0 0 0 9999px rgba(0,0,0,.35); pointer-events:none}
+  .aim-lbl{position:absolute; top:-22px; left:0; font-size:11px; font-weight:700; color:var(--gold); text-transform:uppercase; letter-spacing:.04em; white-space:nowrap}
+  .scan-controls{display:flex; gap:8px}
+  .scan-controls button{flex:1; border:none; font-weight:700; font-size:14px; padding:11px; border-radius:9px; cursor:pointer}
+  .scan-start{background:var(--surface-2); color:var(--text); border:1px solid var(--border)!important}
+  .scan-go{background:var(--gold); color:#241500}
+  .cam-select{width:100%; margin-top:9px; background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:8px; color:var(--text); font-size:13px}
+  .scan-status{margin-top:11px; font-size:13px; color:var(--dim); line-height:1.5; min-height:18px}
+  .scan-cands{display:flex; flex-direction:column; gap:6px; margin-top:9px}
+  .scan-cand{display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--surface-2); border:1px solid var(--border); border-radius:9px; padding:9px 12px; cursor:pointer; text-align:left; color:var(--text)}
+  .scan-cand:hover{border-color:var(--border-2)}
+  .scan-cand .sc-set{font-size:11px; color:var(--faint)}
+  .scan-cand b{color:var(--green); font-family:'JetBrains Mono',monospace; white-space:nowrap}
   .toast{position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--surface-2); border:1px solid var(--border-2); border-radius:10px; padding:11px 18px; font-size:14px; font-weight:600; opacity:0; transition:.2s; pointer-events:none; z-index:50}
   .toast.show{opacity:1}
 </style>
@@ -111,6 +135,22 @@
     <input id="search" placeholder="Search a card name to add it…" autocomplete="off">
     <div class="results" id="results"></div>
   </div>
+
+  <details class="scan-sec" id="scanSec">
+    <summary>📷 Scan a card with your camera <span class="beta">beta</span></summary>
+    <div class="scan-body">
+      <div class="cam-wrap" id="camWrap" style="display:none">
+        <video id="cam" autoplay playsinline muted></video>
+        <div class="aim"><span class="aim-lbl">line up the card NAME here</span></div>
+      </div>
+      <div class="scan-controls">
+        <button class="scan-start" id="camBtn" onclick="toggleCam()">Start camera</button>
+        <button class="scan-go" id="scanBtn" onclick="scanCard()" style="display:none">📸 Scan card</button>
+      </div>
+      <select id="camSelect" class="cam-select" style="display:none" onchange="switchCam()"></select>
+      <div id="scanStatus" class="scan-status"></div>
+    </div>
+  </details>
 
   <div class="totalcard">
     <div class="total-lbl">Pack value so far</div>
@@ -289,6 +329,127 @@ function toast(msg){
   toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
 }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+// ---- camera scanning (beta) ----
+let stream = null, scanning = false, curCamId = null;
+function toggleCam(){ if(stream) stopCam(); else startCam(); }
+async function startCam(deviceId){
+  try{
+    const constraints = { video: deviceId ? { deviceId:{exact:deviceId} } : { facingMode:'environment', width:{ideal:1280}, height:{ideal:720} } };
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
+    curCamId = deviceId || null;
+    document.getElementById('cam').srcObject = stream;
+    document.getElementById('camWrap').style.display = 'block';
+    document.getElementById('scanBtn').style.display = '';
+    document.getElementById('camBtn').textContent = 'Stop camera';
+    setScanStatus("Line the card's <b>name</b> up inside the gold box, then hit Scan.");
+    listCams();
+  }catch(e){ setScanStatus("Couldn't open the camera — check the browser's camera permission for this page."); }
+}
+function stopCam(){
+  if(stream){ stream.getTracks().forEach(t => t.stop()); stream = null; }
+  document.getElementById('camWrap').style.display = 'none';
+  document.getElementById('scanBtn').style.display = 'none';
+  document.getElementById('camSelect').style.display = 'none';
+  document.getElementById('camBtn').textContent = 'Start camera';
+  setScanStatus('');
+}
+async function listCams(){
+  try{
+    const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+    if(devs.length < 2) return;
+    const sel = document.getElementById('camSelect');
+    sel.innerHTML = devs.map((d,i) => `<option value="${d.deviceId}">${esc(d.label || ('Camera ' + (i+1)))}</option>`).join('');
+    if(curCamId) sel.value = curCamId;
+    sel.style.display = 'block';
+  }catch(e){}
+}
+function switchCam(){
+  const id = document.getElementById('camSelect').value;
+  if(stream){ stream.getTracks().forEach(t => t.stop()); stream = null; }
+  startCam(id);
+}
+function setScanStatus(m){ document.getElementById('scanStatus').innerHTML = m; }
+
+async function scanCard(){
+  if(!stream || scanning) return;
+  if(!apiKey){ setScanStatus('Add your API key first (⚙ top right).'); return; }
+  scanning = true;
+  document.getElementById('scanBtn').textContent = '📖 Reading…';
+  setScanStatus('Reading the card…');
+  try{
+    const v = document.getElementById('cam');
+    const vw = v.videoWidth, vh = v.videoHeight;
+    if(!vw){ setScanStatus('Camera not ready yet — give it a second.'); resetScanBtn(); scanning=false; return; }
+    // crop to the aim box (matches the CSS: left 9%, top 42%, w 82%, h 16%)
+    const bx = vw*0.09, by = vh*0.42, bw = vw*0.82, bh = vh*0.16;
+    const scale = 3;
+    const c = document.createElement('canvas'); c.width = bw*scale; c.height = bh*scale;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(v, bx, by, bw, bh, 0, 0, c.width, c.height);
+    // preprocess: grayscale + light threshold to sharpen text
+    const img = ctx.getImageData(0, 0, c.width, c.height); const d = img.data;
+    for(let i=0; i<d.length; i+=4){
+      let g = 0.3*d[i] + 0.59*d[i+1] + 0.11*d[i+2];
+      g = g > 145 ? 255 : (g < 95 ? 0 : g);
+      d[i] = d[i+1] = d[i+2] = g;
+    }
+    ctx.putImageData(img, 0, 0);
+    const { data } = await Tesseract.recognize(c, 'eng');
+    const raw = (data.text || '').replace(/\n/g, ' ').replace(/[^A-Za-z0-9 '&.\-]/g, ' ').replace(/\s+/g, ' ').trim();
+    const conf = data.confidence || 0;
+    if(!raw || raw.length < 2){ setScanStatus('Couldn\'t read that — reposition the name in the box and try again, or use search below.'); resetScanBtn(); scanning=false; return; }
+    setScanStatus('Read: <b>"' + esc(raw) + '"</b> — looking up…');
+    await lookupFromScan(raw, conf);
+  }catch(e){ setScanStatus('Scan hiccup — try again, or use the search box.'); }
+  resetScanBtn(); scanning = false;
+}
+function resetScanBtn(){ document.getElementById('scanBtn').textContent = '📸 Scan card'; }
+
+async function lookupFromScan(text, conf){
+  try{
+    const res = await fetch(`${API}/cards/search?q=${encodeURIComponent(text)}&game=${game}&limit=8`, { headers: { 'X-API-Key': apiKey } });
+    if(res.status === 429){ setScanStatus('Daily lookup limit hit — resets tomorrow.'); return; }
+    if(!res.ok){ setScanStatus('Lookup error (' + res.status + '). Try again or use search.'); return; }
+    const json = await res.json();
+    const cards = (json && json.data) || [];
+    if(!cards.length){ setScanStatus('No match for "' + esc(text) + '". Try again or search manually.'); return; }
+    const top = cards[0];
+    const sim = nameSim(text, top.name || '');
+    if(conf >= 55 && sim >= 0.5){
+      const p = extractPrice(top);
+      pulled.unshift({ id:top.id, name:top.name, set:top.set_name || top.set || '', price:p, game });
+      save(); render();
+      setScanStatus('✓ Added <b>' + esc(top.name) + '</b>' + (p==null ? ' (no price)' : ' · ' + money(p)) + ' — scan the next card.');
+    } else {
+      renderScanCandidates(cards, text);
+    }
+  }catch(e){ setScanStatus('Lookup error — try again or use search.'); }
+}
+// rough name similarity (0–1) using 3-gram overlap + containment
+function nameSim(a, b){
+  a = (a||'').toLowerCase().replace(/[^a-z0-9]/g, '');
+  b = (b||'').toLowerCase().replace(/[^a-z0-9]/g, '');
+  if(!a || !b) return 0;
+  if(b.includes(a) || a.includes(b)) return 0.85;
+  const grams = s => { const g = []; for(let i=0; i<s.length-2; i++) g.push(s.slice(i, i+3)); return g; };
+  const A = new Set(grams(a)); let hit = 0;
+  grams(b).forEach(g => { if(A.has(g)) hit++; });
+  return hit / Math.max(A.size, 1);
+}
+function renderScanCandidates(cards, text){
+  window._res = {};
+  const rows = cards.map((c, i) => {
+    const p = extractPrice(c);
+    window._res['s' + i] = { id:c.id, name:c.name, set:c.set_name || c.set || '', price:p };
+    return `<button class="scan-cand" onclick="pickScan('s${i}')"><span>${esc(c.name)}${c.rarity ? ' · ' + esc(c.rarity) : ''}<br><span class="sc-set">${esc(c.set_name || c.set || '')}</span></span><b>${p==null ? '—' : money(p)}</b></button>`;
+  }).join('');
+  setScanStatus('Read <b>"' + esc(text) + '"</b> — not sure which, pick one:<div class="scan-cands">' + rows + '</div>');
+}
+function pickScan(key){
+  addCard(key);
+  setScanStatus('✓ Added — scan the next card.');
+}
 
 // ---- init ----
 load();
