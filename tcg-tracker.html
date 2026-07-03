@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pack Tracker — live TCG pack value</title>
+<style>
+  :root{
+    --bg:#0e0f13; --surface:#16181f; --surface-2:#1d2029; --border:#282c37; --border-2:#3a3f4d;
+    --text:#f2f3f7; --dim:#9aa0ad; --faint:#6b7080;
+    --gold:#FFB23D; --green:#3DDC97; --accent:#FF5C39;
+    --pk:#FFCB05; --mtg:#F8991C; --ygo:#A566FF; --op:#E4322B;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  body{background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui,-apple-system,Roboto,sans-serif; padding:18px; min-height:100vh}
+  .wrap{max-width:640px; margin:0 auto}
+
+  .top{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px}
+  .brand{font-weight:800; font-size:22px; letter-spacing:-.02em}
+  .brand span{color:var(--gold)}
+  .keybtn{font-size:12px; color:var(--dim); background:var(--surface-2); border:1px solid var(--border); padding:6px 11px; border-radius:8px; cursor:pointer}
+  .keybtn:hover{border-color:var(--border-2)}
+
+  /* api key panel */
+  .keypanel{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px; margin-bottom:14px; display:none}
+  .keypanel.show{display:block}
+  .keypanel p{font-size:13px; color:var(--dim); line-height:1.5; margin-bottom:10px}
+  .keypanel a{color:var(--gold)}
+  .keyrow{display:flex; gap:8px}
+  .keyrow input{flex:1; background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:9px 11px; color:var(--text); font-size:13px; font-family:'JetBrains Mono',monospace}
+  .keyrow button{background:var(--gold); color:#241500; border:none; font-weight:700; padding:9px 15px; border-radius:8px; cursor:pointer}
+
+  /* game tabs */
+  .games{display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:14px}
+  .game{background:var(--surface); border:1px solid var(--border); border-radius:11px; padding:11px 6px; text-align:center; cursor:pointer; font-weight:700; font-size:13px; transition:.12s}
+  .game .dot{display:block; width:10px; height:10px; border-radius:50%; margin:0 auto 6px}
+  .game.pk .dot{background:var(--pk)} .game.mtg .dot{background:var(--mtg)}
+  .game.ygo .dot{background:var(--ygo)} .game.op .dot{background:var(--op)}
+  .game.active{background:var(--surface-2); border-color:var(--border-2)}
+  .game.active.pk{box-shadow:inset 0 0 0 1px var(--pk)} .game.active.mtg{box-shadow:inset 0 0 0 1px var(--mtg)}
+  .game.active.ygo{box-shadow:inset 0 0 0 1px var(--ygo)} .game.active.op{box-shadow:inset 0 0 0 1px var(--op)}
+
+  /* search */
+  .searchwrap{position:relative; margin-bottom:14px}
+  #search{width:100%; background:var(--surface); border:1px solid var(--border); border-radius:11px; padding:13px 15px; color:var(--text); font-size:15px}
+  #search:focus{outline:none; border-color:var(--border-2)}
+  .results{position:absolute; top:100%; left:0; right:0; margin-top:6px; background:var(--surface); border:1px solid var(--border-2); border-radius:11px; overflow:hidden; z-index:20; max-height:340px; overflow-y:auto; display:none; box-shadow:0 12px 40px rgba(0,0,0,.5)}
+  .results.show{display:block}
+  .res{display:flex; align-items:center; gap:10px; padding:11px 13px; cursor:pointer; border-bottom:1px solid var(--border)}
+  .res:last-child{border-bottom:none}
+  .res:hover{background:var(--surface-2)}
+  .res-main{flex:1; min-width:0}
+  .res-name{font-weight:600; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .res-set{font-size:12px; color:var(--faint); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .res-price{font-family:'JetBrains Mono',monospace; font-weight:700; color:var(--green); font-size:14px; white-space:nowrap}
+  .res-price.none{color:var(--faint)}
+  .res-note{padding:12px 14px; font-size:13px; color:var(--dim); text-align:center}
+
+  /* total card */
+  .totalcard{background:linear-gradient(135deg,#1a1d26,#191521); border:1px solid var(--border-2); border-radius:16px; padding:20px; margin-bottom:14px; text-align:center}
+  .total-lbl{font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--faint); margin-bottom:4px}
+  .total-val{font-family:'JetBrains Mono',monospace; font-weight:800; font-size:52px; line-height:1; color:var(--gold)}
+  .total-sub{font-size:13px; color:var(--dim); margin-top:8px}
+
+  /* pulled list */
+  .listhead{display:flex; align-items:center; justify-content:space-between; margin-bottom:9px}
+  .listhead h2{font-size:14px; font-weight:700; color:var(--dim)}
+  .reset{font-size:12px; color:var(--faint); background:none; border:1px solid var(--border); padding:5px 11px; border-radius:7px; cursor:pointer}
+  .reset:hover{color:var(--accent); border-color:var(--accent)}
+  .list{display:flex; flex-direction:column; gap:6px}
+  .empty{text-align:center; color:var(--faint); font-size:14px; padding:30px 0}
+  .item{display:flex; align-items:center; gap:11px; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:10px 13px; animation:pop .25s ease}
+  @keyframes pop{from{opacity:0; transform:translateY(-6px)}to{opacity:1; transform:none}}
+  .item-dot{width:8px; height:8px; border-radius:50%; flex-shrink:0}
+  .item-main{flex:1; min-width:0}
+  .item-name{font-weight:600; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .item-set{font-size:11.5px; color:var(--faint)}
+  .item-price{font-family:'JetBrains Mono',monospace; font-weight:700; color:var(--green); font-size:15px}
+  .item-price.none{color:var(--faint); font-weight:500; font-size:12px}
+  .item-x{color:var(--faint); cursor:pointer; font-size:18px; padding:2px 4px; line-height:1}
+  .item-x:hover{color:var(--accent)}
+
+  .foot{margin-top:16px; font-size:11.5px; color:var(--faint); text-align:center; line-height:1.6}
+  .toast{position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--surface-2); border:1px solid var(--border-2); border-radius:10px; padding:11px 18px; font-size:14px; font-weight:600; opacity:0; transition:.2s; pointer-events:none; z-index:50}
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="brand">Pack<span>Tracker</span></div>
+    <button class="keybtn" onclick="toggleKey()">⚙ API key</button>
+  </div>
+
+  <div class="keypanel" id="keyPanel">
+    <p>This tool needs a <b>free</b> price API key from <a href="https://tcgpricelookup.com/tcg-api" target="_blank" rel="noopener">tcgpricelookup.com</a> (200 lookups/day, no credit card). Sign up, copy your key, and paste it below — it's saved only in this browser.</p>
+    <div class="keyrow">
+      <input id="keyInput" placeholder="Paste your API key…" autocomplete="off">
+      <button onclick="saveKey()">Save</button>
+    </div>
+  </div>
+
+  <div class="games" id="games">
+    <div class="game pk active" data-game="pokemon" onclick="setGame('pokemon',this)"><span class="dot"></span>Pokémon</div>
+    <div class="game mtg" data-game="mtg" onclick="setGame('mtg',this)"><span class="dot"></span>Magic</div>
+    <div class="game ygo" data-game="yugioh" onclick="setGame('yugioh',this)"><span class="dot"></span>Yu-Gi-Oh!</div>
+    <div class="game op" data-game="onepiece" onclick="setGame('onepiece',this)"><span class="dot"></span>One Piece</div>
+  </div>
+
+  <div class="searchwrap">
+    <input id="search" placeholder="Search a card name to add it…" autocomplete="off">
+    <div class="results" id="results"></div>
+  </div>
+
+  <div class="totalcard">
+    <div class="total-lbl">Pack value so far</div>
+    <div class="total-val" id="totalVal">$0.00</div>
+    <div class="total-sub" id="totalSub">0 cards pulled</div>
+  </div>
+
+  <div class="listhead">
+    <h2>Pulled cards</h2>
+    <button class="reset" onclick="resetAll()">Clear all</button>
+  </div>
+  <div class="list" id="list"><div class="empty">Search a card above to start tracking your pull.</div></div>
+
+  <div class="foot">
+    Prices are TCGPlayer market estimates (Near Mint) — real sale prices vary. Foils &amp; alt-arts are priced separately, so pick the exact printing.<br>Stage 1 · manual search. Camera scanning is the next step.
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const API = 'https://api.tcgpricelookup.com/v1';
+let apiKey = '';
+let game = 'pokemon';
+let pulled = [];        // {id,name,set,price,game}
+let searchTimer = null;
+
+// ---- persistence ----
+function save(){
+  try{
+    localStorage.setItem('pt_key', apiKey);
+    localStorage.setItem('pt_game', game);
+    localStorage.setItem('pt_pulled', JSON.stringify(pulled));
+  }catch(e){}
+}
+function load(){
+  try{
+    apiKey = localStorage.getItem('pt_key') || '';
+    game = localStorage.getItem('pt_game') || 'pokemon';
+    pulled = JSON.parse(localStorage.getItem('pt_pulled') || '[]');
+  }catch(e){ pulled = []; }
+}
+
+// ---- api key ----
+function toggleKey(){ document.getElementById('keyPanel').classList.toggle('show'); if(apiKey) document.getElementById('keyInput').value = apiKey; }
+function saveKey(){
+  apiKey = document.getElementById('keyInput').value.trim();
+  save();
+  document.getElementById('keyPanel').classList.remove('show');
+  toast(apiKey ? 'API key saved ✓' : 'Key cleared');
+}
+
+// ---- game select ----
+function setGame(g, el){
+  game = g; save();
+  document.querySelectorAll('.game').forEach(x => x.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('search').value = '';
+  hideResults();
+  document.getElementById('search').focus();
+}
+const GAME_DOT = { pokemon:'var(--pk)', mtg:'var(--mtg)', yugioh:'var(--ygo)', onepiece:'var(--op)' };
+
+// ---- price extraction (defensive: free tier gives raw tcgplayer market) ----
+function extractPrice(card){
+  try{
+    const raw = card.prices && card.prices.raw;
+    if(!raw) return null;
+    const order = ['near_mint','lightly_played','moderately_played','played','normal'];
+    const conds = [];
+    order.forEach(k => { if(raw[k]) conds.push(raw[k]); });
+    Object.keys(raw).forEach(k => { if(!order.includes(k)) conds.push(raw[k]); });
+    for(const c of conds){
+      const tp = c && c.tcgplayer;
+      if(tp){
+        const v = (typeof tp.market === 'number') ? tp.market
+                : (typeof tp.mid === 'number') ? tp.mid
+                : (typeof tp.low === 'number') ? tp.low : null;
+        if(v != null) return v;
+      }
+    }
+  }catch(e){}
+  return null;
+}
+const money = n => '$' + (Number(n)||0).toFixed(2);
+
+// ---- search ----
+document.getElementById('search').addEventListener('input', function(){
+  const q = this.value.trim();
+  clearTimeout(searchTimer);
+  if(q.length < 2){ hideResults(); return; }
+  searchTimer = setTimeout(() => runSearch(q), 350);
+});
+document.addEventListener('click', e => { if(!e.target.closest('.searchwrap')) hideResults(); });
+
+async function runSearch(q){
+  if(!apiKey){ showResultNote('Add your free API key first (⚙ top right).'); return; }
+  showResultNote('Searching…');
+  try{
+    const res = await fetch(`${API}/cards/search?q=${encodeURIComponent(q)}&game=${game}&limit=12`, {
+      headers: { 'X-API-Key': apiKey }
+    });
+    if(res.status === 401){ showResultNote('That API key looks invalid — check it in ⚙.'); return; }
+    if(res.status === 429){ showResultNote("Daily lookup limit hit — resets tomorrow (or upgrade the key's plan)."); return; }
+    if(!res.ok){ showResultNote('Search error (' + res.status + '). Try again.'); return; }
+    const json = await res.json();
+    const cards = (json && json.data) || [];
+    renderResults(cards);
+  }catch(e){ showResultNote('Network error — check your connection.'); }
+}
+
+function renderResults(cards){
+  const box = document.getElementById('results');
+  if(!cards.length){ showResultNote('No cards found. Try a different spelling.'); return; }
+  box.innerHTML = cards.map((c, i) => {
+    const p = extractPrice(c);
+    window._res = window._res || {};
+    const key = 'r' + i;
+    window._res[key] = { id:c.id, name:c.name, set:c.set_name || c.set || '', price:p };
+    return `<div class="res" onclick="addCard('${key}')">
+      <div class="res-main">
+        <div class="res-name">${esc(c.name || 'Unknown')}${c.rarity ? ' · ' + esc(c.rarity) : ''}</div>
+        <div class="res-set">${esc(c.set_name || c.set || '')}</div>
+      </div>
+      <div class="res-price ${p==null?'none':''}">${p==null ? 'no price' : money(p)}</div>
+    </div>`;
+  }).join('');
+  box.classList.add('show');
+}
+function showResultNote(msg){
+  const box = document.getElementById('results');
+  box.innerHTML = `<div class="res-note">${esc(msg)}</div>`;
+  box.classList.add('show');
+}
+function hideResults(){ document.getElementById('results').classList.remove('show'); }
+
+// ---- add / remove ----
+function addCard(key){
+  const c = window._res && window._res[key];
+  if(!c) return;
+  pulled.unshift({ id:c.id, name:c.name, set:c.set, price:c.price, game });
+  save(); render();
+  document.getElementById('search').value = '';
+  hideResults();
+  toast(c.price==null ? `Added ${c.name} (no price)` : `Added ${c.name} · ${money(c.price)}`);
+}
+function removeCard(i){ pulled.splice(i,1); save(); render(); }
+
+function render(){
+  const list = document.getElementById('list');
+  const total = pulled.reduce((s,c) => s + (Number(c.price)||0), 0);
+  document.getElementById('totalVal').textContent = money(total);
+  document.getElementById('totalSub').textContent = pulled.length + (pulled.length===1?' card':' cards') + ' pulled';
+  if(!pulled.length){ list.innerHTML = '<div class="empty">Search a card above to start tracking your pull.</div>'; return; }
+  list.innerHTML = pulled.map((c,i) => `<div class="item">
+    <span class="item-dot" style="background:${GAME_DOT[c.game]||'var(--faint)'}"></span>
+    <div class="item-main">
+      <div class="item-name">${esc(c.name)}</div>
+      <div class="item-set">${esc(c.set||'')}</div>
+    </div>
+    <span class="item-price ${c.price==null?'none':''}">${c.price==null?'no price':money(c.price)}</span>
+    <span class="item-x" onclick="removeCard(${i})" title="Remove">✕</span>
+  </div>`).join('');
+}
+
+function resetAll(){
+  if(pulled.length && !confirm('Clear all pulled cards and reset the total?')) return;
+  pulled = []; save(); render(); toast('Cleared — fresh pack!');
+}
+
+// ---- toast ----
+let toastTimer = null;
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+// ---- init ----
+load();
+document.querySelectorAll('.game').forEach(el => {
+  el.classList.toggle('active', el.dataset.game === game);
+});
+render();
+if(!apiKey) document.getElementById('keyPanel').classList.add('show');
+</script>
+</body>
+</html>
