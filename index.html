@@ -1016,6 +1016,7 @@
     <textarea id="afDesc" class="af-input" style="min-height:60px; resize:vertical" maxlength="200" placeholder="What's included, file types, etc."></textarea>
     <label class="af-lbl">Preview image URL (shown free to everyone)</label>
     <input id="afPreview" class="af-input" placeholder="https://i.imgur.com/…">
+    <div class="af-hosts">Accepted: Imgur, Discord CDN, Giphy, Tenor, Reddit, X/Twitter, Unsplash, ibb.co, postimg.cc — must be a direct image link</div>
     <label class="af-lbl">The file you're selling (PNG, unlocked only after payment)</label>
     <input id="afFile" class="af-input" type="file" accept="image/png">
     <div id="afProgress" class="af-hosts"></div>
@@ -3110,7 +3111,7 @@ async function loadProfile(handle){
     try{ const { data: st } = await sb.rpc('user_stats', { p_username: currentProfile.username || handle }); profileStats = st || {}; }
     catch(e){ profileStats = {}; }
     try{
-      const { data: as } = await sb.from('profile_assets').select('id, title, price_text, description, preview_url, store_url').eq('owner_id', currentProfile.id).order('sort_order', { ascending:true });
+      const { data: as } = await sb.from('profile_assets').select('id, title, price_cents, description, preview_url, file_path').eq('owner_id', currentProfile.id).order('sort_order', { ascending:true });
       profileAssets = as || [];
     }catch(e){ profileAssets = []; }
     await loadPosts();
