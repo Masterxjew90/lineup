@@ -189,6 +189,10 @@
   .af-err{color:var(--accent); font-size:12.5px; font-weight:600; min-height:16px; margin-top:10px}
   .stripe-gate{background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:14px}
   .stripe-connected{font-size:13px; font-weight:700; color:var(--good); margin-bottom:10px}
+  .af-input[type="file"]{padding:8px 10px; font-size:12.5px}
+  .purchase-row{display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:11px 13px; margin-bottom:8px}
+  .purchase-t{font-weight:700; font-size:13.5px}
+  .purchase-d{font-size:11.5px; color:var(--faint); margin-top:2px}
   .welcome-modal{max-width:480px}
   .wel-head{text-align:center; margin-bottom:20px}
   .wel-logo{font-family:'Bricolage Grotesque',sans-serif; font-weight:800; font-size:38px; letter-spacing:-.02em}
@@ -886,6 +890,7 @@
         <button class="mypage-btn" id="myPageBtn" style="display:none" onclick="if(me)openProfile(me.username || me.login)">View &amp; edit my page →</button>
         <button class="mypage-btn" id="achieveBtn" style="display:none" onclick="openAchievements()">🏆 My achievements</button>
         <button class="mypage-btn" id="shareBtn" style="display:none" onclick="openShareModal()">📣 Share my page</button>
+        <button class="mypage-btn" id="purchasesBtn" style="display:none" onclick="openPurchases()">🧾 My purchases</button>
         <button class="mypage-btn admin-open-btn" id="adminBtn" style="display:none" onclick="openAdmin()">⚑ Review reports</button>
       </div>
 
@@ -997,6 +1002,42 @@
     <div class="wel-safe"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg> Sign in is secure — Lineup uses each platform's official login and never sees your password.</div>
   </div>
 </div>
+</div>
+
+<div class="modal-bg" id="assetModal" onclick="if(event.target===this)closeAssetAdd()">
+  <div class="modal">
+    <div class="admin-head"><b>🎨 List an asset for sale</b><button class="music-close" style="position:static" onclick="closeAssetAdd()" aria-label="Close">✕</button></div>
+    <p class="rail-note" style="margin:0 0 12px">Sold and paid through Lineup with real checkout — buyers pay by card, you get paid straight to your connected Stripe account.</p>
+    <label class="af-lbl">Title</label>
+    <input id="afTitle" class="af-input" placeholder="e.g. Neon Cyberpunk Overlay Pack" maxlength="80">
+    <label class="af-lbl">Price (USD)</label>
+    <input id="afPrice" class="af-input" type="number" min="0.50" max="1000" step="0.01" placeholder="12.00">
+    <label class="af-lbl">Short description (optional)</label>
+    <textarea id="afDesc" class="af-input" style="min-height:60px; resize:vertical" maxlength="200" placeholder="What's included, file types, etc."></textarea>
+    <label class="af-lbl">Preview image URL (shown free to everyone)</label>
+    <input id="afPreview" class="af-input" placeholder="https://i.imgur.com/…">
+    <label class="af-lbl">The file you're selling (PNG, unlocked only after payment)</label>
+    <input id="afFile" class="af-input" type="file" accept="image/png">
+    <div id="afProgress" class="af-hosts"></div>
+    <div id="afErr" class="af-err"></div>
+    <button class="wel-cta" id="afSubmitBtn" onclick="submitAsset()">List it</button>
+  </div>
+</div>
+
+<div class="modal-bg" id="purchasesModal" onclick="if(event.target===this)closePurchases()">
+  <div class="modal">
+    <div class="admin-head"><b>🧾 My purchases</b><button class="music-close" style="position:static" onclick="closePurchases()" aria-label="Close">✕</button></div>
+    <div id="purchasesList"><p class="rail-note">Loading…</p></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="downloadModal" onclick="if(event.target===this)closeDownloadModal()">
+  <div class="modal" style="text-align:center">
+    <div class="admin-head"><b>✅ Purchase complete</b><button class="music-close" style="position:static" onclick="closeDownloadModal()" aria-label="Close">✕</button></div>
+    <p class="rail-note" style="margin:0 0 14px" id="dlTitle"></p>
+    <a class="wel-cta" style="display:block; text-decoration:none" id="dlLink" href="#" target="_blank" rel="noopener">⬇ Download your file</a>
+    <p class="rail-note" style="margin-top:12px">This link expires soon for security — find it anytime under <b>🧾 My purchases</b>.</p>
+  </div>
 </div>
 
 <div class="modal-bg" id="shareModal" onclick="if(event.target===this)closeShare()">
@@ -2069,6 +2110,142 @@ async function removeAsset(id){
     toast('Removed', '✓');
     if(me) await loadProfile(me.username);
   }catch(e){ toast("Couldn't remove — try again", '✕'); }
+}
+
+// ---- add-asset modal (upload + list) ----
+function openAssetAdd(){
+  ['afTitle','afPrice','afDesc','afPreview'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  const f = document.getElementById('afFile'); if(f) f.value = '';
+  document.getElementById('afErr').textContent = '';
+  document.getElementById('afProgress').textContent = '';
+  document.getElementById('assetModal').style.display = 'flex';
+  lockScroll(true);
+}
+function closeAssetAdd(){ document.getElementById('assetModal').style.display = 'none'; lockScroll(false); }
+async function submitAsset(){
+  const err = document.getElementById('afErr'); err.textContent = '';
+  const prog = document.getElementById('afProgress'); prog.textContent = '';
+  const btn = document.getElementById('afSubmitBtn');
+  const title = document.getElementById('afTitle').value.trim();
+  const priceStr = document.getElementById('afPrice').value.trim();
+  const desc = document.getElementById('afDesc').value.trim();
+  const preview = document.getElementById('afPreview').value.trim();
+  const fileInput = document.getElementById('afFile');
+  const file = fileInput.files && fileInput.files[0];
+
+  if(!title){ err.textContent = 'Give it a title.'; return; }
+  const price = Math.round(parseFloat(priceStr || '0') * 100);
+  if(!price || price < 50){ err.textContent = 'Price must be at least $0.50.'; return; }
+  if(price > 100000){ err.textContent = 'Price must be $1,000 or less.'; return; }
+  if(!file){ err.textContent = 'Choose the PNG file you\'re selling.'; return; }
+  if(file.type !== 'image/png'){ err.textContent = 'Only PNG files are supported right now.'; return; }
+  if(file.size > 15*1024*1024){ err.textContent = 'File is too large (15MB max).'; return; }
+  if(preview && !safeBgUrl(preview)){ err.textContent = 'Preview image must be a direct https link from a supported image host.'; return; }
+  if(!me || !me.username){ err.textContent = 'Sign in first.'; return; }
+
+  btn.disabled = true; btn.textContent = 'Uploading…';
+  try{
+    const { data: { user } } = await sb.auth.getUser();
+    const path = `${user.id}/${Date.now()}_${Math.random().toString(36).slice(2,8)}.png`;
+    prog.textContent = 'Uploading your file securely…';
+    const { error: upErr } = await sb.storage.from('asset-files').upload(path, file, { contentType: 'image/png', upsert: false });
+    if(upErr){ err.textContent = "Couldn't upload the file — try again."; btn.disabled = false; btn.textContent = 'List it'; prog.textContent=''; return; }
+
+    prog.textContent = 'Creating your listing…';
+    const { data, error } = await sb.rpc('add_asset', { p_title:title, p_price_cents:price, p_desc:desc, p_preview:preview, p_file_path:path });
+    if(error) throw error;
+    if(!data || !data.ok){
+      const e2 = (data && data.error) || '';
+      err.textContent = e2 === 'offensive' ? "That wording isn't allowed — try rephrasing."
+        : e2 === 'limit' ? 'You can list up to 12 items — remove one to add another.'
+        : e2 === 'not onboarded' ? 'Your Stripe connection needs to finish first.'
+        : "Couldn't list that — try again.";
+      // clean up the orphaned upload since the listing failed
+      try{ await sb.storage.from('asset-files').remove([path]); }catch(e3){}
+      btn.disabled = false; btn.textContent = 'List it'; prog.textContent = '';
+      return;
+    }
+    closeAssetAdd();
+    toast('Listed! 🎨', '✓');
+    if(currentProfile && (currentProfile.username||'').toLowerCase() === (me.username||'').toLowerCase()) await loadProfile(me.username);
+  }catch(e){ err.textContent = "Couldn't list that — try again."; }
+  btn.disabled = false; btn.textContent = 'List it'; prog.textContent = '';
+}
+
+// ---- buying ----
+async function buyAsset(assetId, btnEl){
+  if(!me || !me.username){ showBanner('info', 'Sign in first to buy.'); return; }
+  if(btnEl){ btnEl.disabled = true; btnEl.textContent = 'Opening checkout…'; }
+  try{
+    const { data, error } = await sb.functions.invoke('stripe-checkout', { body: { action:'create-checkout', asset_id: assetId } });
+    if(error || !data || data.error || !data.url){
+      toast((data && data.error) || "Couldn't start checkout — try again", '✕');
+      if(btnEl){ btnEl.disabled = false; btnEl.textContent = 'Buy →'; }
+      return;
+    }
+    location.href = data.url;
+  }catch(e){
+    toast("Couldn't reach checkout — try again", '✕');
+    if(btnEl){ btnEl.disabled = false; btnEl.textContent = 'Buy →'; }
+  }
+}
+async function checkPurchaseReturn(){
+  const p = new URLSearchParams(location.search);
+  const flag = p.get('purchase');
+  if(!flag) return;
+  const sessionId = p.get('session_id');
+  const clean = location.origin + location.pathname;
+  history.replaceState({}, '', clean);
+  if(flag === 'cancel'){ toast('Checkout cancelled — no charge made.', 'ℹ'); return; }
+  if(flag === 'success' && sessionId){
+    if(!me){ toast('Finishing up your purchase…', '⏳'); return; }   // will settle once logged in; buyer can find it in My purchases
+    toast('Confirming your payment…', '⏳');
+    try{
+      const { data, error } = await sb.functions.invoke('stripe-checkout', { body: { action:'verify', session_id: sessionId } });
+      if(error || !data || data.error || !data.ok){
+        toast((data && data.error) || "Couldn't confirm the payment — check My purchases in a moment.", '✕');
+        return;
+      }
+      openDownloadModal(data.title, data.download_url);
+    }catch(e){ toast("Couldn't confirm the payment — check My purchases in a moment.", '✕'); }
+  }
+}
+function openDownloadModal(title, url){
+  document.getElementById('dlTitle').textContent = title ? ('You bought "' + title + '" — here\'s your file:') : 'Here\'s your file:';
+  const a = document.getElementById('dlLink');
+  a.href = url || '#';
+  document.getElementById('downloadModal').style.display = 'flex';
+  lockScroll(true);
+}
+function closeDownloadModal(){ document.getElementById('downloadModal').style.display = 'none'; lockScroll(false); }
+
+// ---- my purchases ----
+async function openPurchases(){
+  if(!me){ showBanner('info', 'Sign in to see your purchases.'); return; }
+  document.getElementById('purchasesModal').style.display = 'flex';
+  lockScroll(true);
+  const list = document.getElementById('purchasesList');
+  list.innerHTML = '<p class="rail-note">Loading…</p>';
+  try{
+    const { data, error } = await sb.functions.invoke('stripe-checkout', { body: { action:'my-purchases' } });
+    if(error || !data){ list.innerHTML = '<p class="rail-note">Couldn\'t load your purchases — try again.</p>'; return; }
+    const items = data.purchases || [];
+    if(!items.length){ list.innerHTML = '<p class="rail-note">Nothing purchased yet.</p>'; return; }
+    list.innerHTML = items.map(p => `<div class="purchase-row">
+      <div><div class="purchase-t">${esc(p.asset_title_snapshot||'Asset')}</div><div class="purchase-d">$${(p.price_cents/100).toFixed(2)} · ${new Date(p.created_at).toLocaleDateString()}</div></div>
+      <button class="asset-buy" onclick="redownload('${p.id}', this)">⬇ Download</button>
+    </div>`).join('');
+  }catch(e){ list.innerHTML = '<p class="rail-note">Couldn\'t load your purchases — try again.</p>'; }
+}
+function closePurchases(){ document.getElementById('purchasesModal').style.display = 'none'; lockScroll(false); }
+async function redownload(purchaseId, btnEl){
+  if(btnEl){ btnEl.disabled = true; btnEl.textContent = '…'; }
+  try{
+    const { data, error } = await sb.functions.invoke('stripe-checkout', { body: { action:'download', purchase_id: purchaseId } });
+    if(error || !data || !data.download_url){ toast("Couldn't get the download link", '✕'); }
+    else window.open(data.download_url, '_blank', 'noopener');
+  }catch(e){ toast("Couldn't get the download link", '✕'); }
+  if(btnEl){ btnEl.disabled = false; btnEl.textContent = '⬇ Download'; }
 }
 let _achCheckAt = 0;
 async function checkNewAchievements(force){
@@ -3248,8 +3425,10 @@ async function afterLoginReferral(){
   renderTrain();
   const ab = document.getElementById('achieveBtn'); if(ab) ab.style.display = (me && me.username) ? 'block' : 'none';
   const sb2 = document.getElementById('shareBtn'); if(sb2) sb2.style.display = (me && me.username) ? 'block' : 'none';
+  const pb = document.getElementById('purchasesBtn'); if(pb) pb.style.display = (me && me.username) ? 'block' : 'none';
   checkNewAchievements(true);
   checkStripeReturn();
+  checkPurchaseReturn();
 }
 function showWelcome(){ const m = document.getElementById('welcomeModal'); if(m){ m.style.display = 'flex'; lockScroll(true); } }
 function closeWelcome(){ const m = document.getElementById('welcomeModal'); if(m) m.style.display = 'none'; lockScroll(false); try{ localStorage.setItem('lineup_welcomed', '1'); }catch(e){} }
@@ -3634,6 +3813,7 @@ function renderProfile(){
       if(!(profileAssets && profileAssets.length) && !isMe) return '';
       const items = (profileAssets||[]).map(a => {
         const img = a.preview_url ? resolveImg(a.preview_url) : null;
+        const priceStr = (typeof a.price_cents === 'number') ? '$' + (a.price_cents/100).toFixed(2) : '';
         return `<div class="asset-card">
           ${isMe ? `<span class="asset-x" onclick="removeAsset('${a.id}')" title="Remove">✕</span>` : ''}
           ${img ? `<div class="asset-img" style="background-image:url('${esc(img)}')"></div>` : `<div class="asset-img asset-img-blank">🎨</div>`}
@@ -3641,8 +3821,8 @@ function renderProfile(){
             <div class="asset-t">${esc(a.title)}</div>
             ${a.description ? `<div class="asset-d">${esc(a.description)}</div>` : ''}
             <div class="asset-foot">
-              ${a.price_text ? `<span class="asset-price">${esc(a.price_text)}</span>` : '<span></span>'}
-              <button class="asset-buy" onclick="toast('Checkout is coming in the next update — hang tight!','🔧')">View / Buy →</button>
+              ${priceStr ? `<span class="asset-price">${priceStr}</span>` : '<span></span>'}
+              ${isMe ? '' : `<button class="asset-buy" onclick="buyAsset('${a.id}', this)">Buy →</button>`}
             </div>
           </div>
         </div>`;
@@ -3655,7 +3835,7 @@ function renderProfile(){
             <button class="asset-add-btn" onclick="startStripeOnboard()" id="stripeConnectBtn">🔗 Connect Stripe to start selling</button>
           </div>`;
         } else {
-          ownerCtl = `<div class="stripe-connected">✓ Stripe connected — you're set up to sell</div><p class="rail-note" style="margin:0">Asset uploads &amp; checkout are coming in the next update — you're ready to go the moment they land.</p>`;
+          ownerCtl = `<div class="stripe-connected">✓ Stripe connected — you're set up to sell</div><button class="asset-add-btn" onclick="openAssetAdd()">+ Add an asset for sale</button>`;
         }
       }
       return `<div class="pf-section-t">🎨 Assets for sale</div>
