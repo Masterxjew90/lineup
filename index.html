@@ -163,6 +163,7 @@
   .share-actions{display:flex; gap:8px; flex-wrap:wrap}
   .share-actions button{flex:1; min-width:100px; border:none; font-weight:700; font-size:13px; padding:11px; border-radius:10px; cursor:pointer}
   .share-x{background:#000; color:#fff; border:1px solid var(--border-2)!important}
+  .share-fb{background:#1877F2; color:#fff}
   .share-native{background:var(--accent); color:#fff}
   .share-copy{background:var(--surface-3); color:var(--text); border:1px solid var(--border)!important}
   .share-actions button:hover{filter:brightness(1.1)}
@@ -988,6 +989,7 @@
     <div class="share-link" id="shareLinkShown"></div>
     <div class="share-actions">
       <button class="share-x" onclick="shareToX()">Share on X</button>
+      <button class="share-fb" onclick="shareToFacebook()">Share on Facebook</button>
       <button class="share-native" id="shareNativeBtn" onclick="shareNative()">Share…</button>
       <button class="share-copy" onclick="copyShareMsg()">Copy caption</button>
     </div>
@@ -3194,6 +3196,18 @@ function shareToX(){
   const t = document.getElementById('shareText').value || '';
   const url = 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(t) + '&url=' + encodeURIComponent(shareLinkUrl());
   window.open(url, '_blank', 'noopener');
+}
+function shareToFacebook(){
+  // Facebook's share dialog only accepts a URL (it ignores pre-filled text/quote params
+  // to prevent spam), so we copy the caption for the person to paste themselves.
+  const t = document.getElementById('shareText').value || '';
+  if(t){
+    const done = ()=>{};
+    if(navigator.clipboard) navigator.clipboard.writeText(t).then(done).catch(()=>{});
+  }
+  toast('Caption copied — paste it into the Facebook post box', '📋');
+  const url = 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(shareLinkUrl());
+  setTimeout(()=> window.open(url, '_blank', 'noopener'), 350);
 }
 async function shareNative(){
   const t = document.getElementById('shareText').value || '';
