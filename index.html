@@ -167,6 +167,26 @@
   .share-native{background:var(--accent); color:#fff}
   .share-copy{background:var(--surface-3); color:var(--text); border:1px solid var(--border)!important}
   .share-actions button:hover{filter:brightness(1.1)}
+  /* assets for sale */
+  .asset-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:11px; margin-bottom:12px}
+  .asset-card{position:relative; background:var(--surface-2); border:1px solid var(--border); border-radius:13px; overflow:hidden; display:flex; flex-direction:column}
+  .asset-img{width:100%; aspect-ratio:16/10; background-size:cover; background-position:center; background-color:var(--surface-3)}
+  .asset-img-blank{display:flex; align-items:center; justify-content:center; font-size:26px}
+  .asset-body{padding:11px 12px 12px; display:flex; flex-direction:column; gap:5px; flex:1}
+  .asset-t{font-weight:700; font-size:13.5px; line-height:1.3}
+  .asset-d{font-size:11.5px; color:var(--faint); line-height:1.4}
+  .asset-foot{display:flex; align-items:center; justify-content:space-between; margin-top:auto; padding-top:6px}
+  .asset-price{font-family:'JetBrains Mono',monospace; font-weight:700; color:var(--good); font-size:13px}
+  .asset-buy{font-size:12px; font-weight:700; color:var(--accent)}
+  .asset-buy:hover{text-decoration:underline}
+  .asset-x{position:absolute; top:7px; right:7px; z-index:2; background:rgba(0,0,0,.55); color:#fff; width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; cursor:pointer}
+  .asset-x:hover{background:var(--accent)}
+  .asset-add-btn{width:100%; background:var(--surface-2); border:1px solid var(--border); color:var(--text); font-weight:700; font-size:13px; padding:11px; border-radius:10px; cursor:pointer}
+  .asset-add-btn:hover{border-color:var(--border-2)}
+  .af-lbl{display:block; font-size:12px; font-weight:700; color:var(--dim); margin:12px 0 5px}
+  .af-input{width:100%; background:var(--surface-2); border:1px solid var(--border); border-radius:9px; padding:10px 12px; color:var(--text); font:inherit; font-size:14px}
+  .af-hosts{font-size:11px; color:var(--faint); margin-top:6px}
+  .af-err{color:var(--accent); font-size:12.5px; font-weight:600; min-height:16px; margin-top:10px}
   .welcome-modal{max-width:480px}
   .wel-head{text-align:center; margin-bottom:20px}
   .wel-logo{font-family:'Bricolage Grotesque',sans-serif; font-weight:800; font-size:38px; letter-spacing:-.02em}
@@ -973,6 +993,26 @@
     </div>
     <button class="wel-cta" onclick="closeWelcome()">Let's go →</button>
     <div class="wel-safe"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg> Sign in is secure — Lineup uses each platform's official login and never sees your password.</div>
+  </div>
+</div>
+
+<div class="modal-bg" id="assetModal" onclick="if(event.target===this)closeAssetAdd()">
+  <div class="modal">
+    <div class="admin-head"><b>🎨 List an asset for sale</b><button class="music-close" style="position:static" onclick="closeAssetAdd()" aria-label="Close">✕</button></div>
+    <p class="rail-note" style="margin:0 0 12px">Sells through your <b>own</b> store (Gumroad, Payhip, Ko-fi, itch.io, Stripe Payment Link, etc.) — Lineup just showcases it and links out. You get paid directly, we never touch the money.</p>
+    <label class="af-lbl">Title</label>
+    <input id="afTitle" class="af-input" placeholder="e.g. Neon Cyberpunk Overlay Pack" maxlength="80">
+    <label class="af-lbl">Price (shown as text — e.g. "$12" or "Starting at $8")</label>
+    <input id="afPrice" class="af-input" placeholder="$12" maxlength="30">
+    <label class="af-lbl">Short description (optional)</label>
+    <textarea id="afDesc" class="af-input" style="min-height:60px; resize:vertical" maxlength="200" placeholder="What's included, file types, etc."></textarea>
+    <label class="af-lbl">Preview image URL (optional)</label>
+    <input id="afPreview" class="af-input" placeholder="https://i.imgur.com/…">
+    <label class="af-lbl">Your store link (where people buy it)</label>
+    <input id="afStore" class="af-input" placeholder="https://gumroad.com/l/…">
+    <div class="af-hosts">Accepted: Gumroad, Payhip, Ko-fi, itch.io, BuyMeACoffee, Etsy, Patreon, Stripe Payment Links</div>
+    <div id="afErr" class="af-err"></div>
+    <button class="wel-cta" onclick="submitAsset()">List it</button>
   </div>
 </div>
 
@@ -1999,6 +2039,47 @@ async function openAchievements(){
   }).join('');
 }
 function closeAchievements(){ const m = document.getElementById('achieveModal'); if(m) m.style.display='none'; lockScroll(false); }
+
+function openAssetAdd(){
+  ['afTitle','afPrice','afDesc','afPreview','afStore'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  document.getElementById('afErr').textContent = '';
+  document.getElementById('assetModal').style.display = 'flex';
+  lockScroll(true);
+}
+function closeAssetAdd(){ document.getElementById('assetModal').style.display = 'none'; lockScroll(false); }
+async function submitAsset(){
+  const err = document.getElementById('afErr');
+  err.textContent = '';
+  const title = document.getElementById('afTitle').value.trim();
+  const price = document.getElementById('afPrice').value.trim();
+  const desc = document.getElementById('afDesc').value.trim();
+  const preview = document.getElementById('afPreview').value.trim();
+  const store = document.getElementById('afStore').value.trim();
+  if(!title){ err.textContent = 'Give it a title.'; return; }
+  if(!store){ err.textContent = 'Add your store link.'; return; }
+  if(!safeStoreUrl(store)){ err.textContent = "That store link isn't from a supported host — see the accepted list above."; return; }
+  if(preview && !safeBgUrl(preview)){ err.textContent = 'Preview image must be a direct https link from a supported image host.'; return; }
+  try{
+    const { data, error } = await sb.rpc('add_asset', { p_title:title, p_price:price, p_desc:desc, p_preview:preview, p_store:store });
+    if(error) throw error;
+    if(!data || !data.ok){
+      const e2 = (data && data.error) || '';
+      err.textContent = e2 === 'offensive' ? "That wording isn't allowed — try rephrasing." : e2 === 'limit' ? 'You can list up to 12 items — remove one to add another.' : "Couldn't list that — try again.";
+      return;
+    }
+    closeAssetAdd();
+    toast('Listed! 🎨', '✓');
+    if(currentProfile && me && (currentProfile.username||'').toLowerCase() === (me.username||'').toLowerCase()) await loadProfile(me.username);
+  }catch(e){ err.textContent = "Couldn't list that — try again."; }
+}
+async function removeAsset(id){
+  if(!confirm('Remove this listing?')) return;
+  try{
+    await sb.rpc('delete_asset', { p_id: id });
+    toast('Removed', '✓');
+    if(me) await loadProfile(me.username);
+  }catch(e){ toast("Couldn't remove — try again", '✕'); }
+}
 let _achCheckAt = 0;
 async function checkNewAchievements(force){
   if(!me) return;
@@ -2638,8 +2719,9 @@ let currentProfile = undefined;  // undefined=loading, null=not found, object=lo
 let editingProfile = false;
 let profilePosts = [];
 let profileStats = {};
+let profileAssets = [];
 let editLayout = null;   // working copy of section order while editing
-const SECTION_LABELS = { stats:'Points & level', badges:'Achievements', bio:'About', links:'Links', wall:'Wall' };
+const SECTION_LABELS = { stats:'Points & level', badges:'Achievements', bio:'About', links:'Links', wall:'Wall', assets:'Assets for sale' };
 let playerTracks = [];
 let playerIndex = 0;
 function profileTracks(p){
@@ -2656,7 +2738,7 @@ function playerRenderEmbed(){
 function playerNext(){ if(!playerTracks.length) return; playerIndex = (playerIndex + 1) % playerTracks.length; playerRenderEmbed(); }
 function playerPrev(){ if(!playerTracks.length) return; playerIndex = (playerIndex - 1 + playerTracks.length) % playerTracks.length; playerRenderEmbed(); }
 function normLayout(saved){
-  const keys = ['stats','badges','bio','links','wall'];
+  const keys = ['stats','badges','bio','links','assets','wall'];
   let arr = Array.isArray(saved) ? saved.filter(x => x && keys.includes(x.k)) : [];
   const seen = {}; arr = arr.filter(x => seen[x.k] ? false : (seen[x.k] = true));
   keys.forEach((k, idx) => { if(!arr.find(x => x.k === k)) arr.splice(Math.min(idx, arr.length), 0, { k, show:true }); });
@@ -2813,6 +2895,14 @@ function tipButtons(p){
 }
 // ---- giveaway link (reputable platforms only, so it can't be a scam vector) ----
 const GIVEAWAY_HOSTS = ['gleam.io','rafflecopter.com','woobox.com','kingsumo.com','tiltify.com','throne.com','discord.gg','discord.com','twitch.tv','streamlabs.com','streamelements.com'];
+const STORE_HOSTS = ['gumroad.com','payhip.com','ko-fi.com','itch.io','buymeacoffee.com','etsy.com','patreon.com','buy.stripe.com','streamelements.com'];
+function safeStoreUrl(u){
+  u = (u || '').trim();
+  if(!/^https:\/\//i.test(u)) return null;
+  if(/["'()\s<>]/.test(u)) return null;
+  let host; try{ host = new URL(u).hostname.toLowerCase(); }catch(e){ return null; }
+  return STORE_HOSTS.some(d => host === d || host.endsWith('.' + d)) ? u : null;
+}
 function safeGiveawayUrl(u){
   u = (u || '').trim();
   if(!/^https:\/\//i.test(u)) return null;
@@ -2851,7 +2941,7 @@ function pid(x){ return x && (x.username || x.twitch_login) || ''; }
 function isMe(p){ return !!(me && p && ((me.username && p.username && me.username.toLowerCase() === p.username.toLowerCase()) || (me.login && p.twitch_login && me.login.toLowerCase() === p.twitch_login.toLowerCase()))); }
 async function loadProfile(handle){
   handle = (handle || '').toLowerCase();
-  const cols = 'twitch_login, display_name, avatar, points, total_earned, bio, accent, links, music_url, bg_url, layout, fb_verified, fb_name, card_url, music_list, guestbook_open, username, verified_providers, kick_slug, hidden';
+  const cols = 'id, twitch_login, display_name, avatar, points, total_earned, bio, accent, links, music_url, bg_url, layout, fb_verified, fb_name, card_url, music_list, guestbook_open, username, verified_providers, kick_slug, hidden';
   try{
     let { data } = await sb.from('profiles').select(cols).ilike('username', handle).limit(1);
     if(!data || !data.length){ const r2 = await sb.from('profiles').select(cols).ilike('twitch_login', handle).limit(1); data = r2.data; }
@@ -2860,6 +2950,10 @@ async function loadProfile(handle){
   if(currentProfile){
     try{ const { data: st } = await sb.rpc('user_stats', { p_username: currentProfile.username || handle }); profileStats = st || {}; }
     catch(e){ profileStats = {}; }
+    try{
+      const { data: as } = await sb.from('profile_assets').select('id, title, price_text, description, preview_url, store_url').eq('owner_id', currentProfile.id).order('sort_order', { ascending:true });
+      profileAssets = as || [];
+    }catch(e){ profileAssets = []; }
     await loadPosts();
   }
   renderProfile();
@@ -3552,6 +3646,30 @@ function renderProfile(){
         + earned.map(a => `<span class="pf-badge" title="${esc(a.desc)}">${a.icon} ${esc(a.name)}</span>`).join('') + `</div>`;
     })(),
     links: (twitchLink || kickLink || linkBtns) ? `<div class="pf-section-t">Find me on</div><div class="pf-links">${twitchLink}${kickLink}${linkBtns}</div>` : '',
+    assets: (()=>{
+      const isMe = me && p && (p.username||'').toLowerCase() === (me.username||'').toLowerCase();
+      if(!(profileAssets && profileAssets.length) && !isMe) return '';
+      const items = (profileAssets||[]).map(a => {
+        const store = safeStoreUrl(a.store_url);
+        const img = a.preview_url ? resolveImg(a.preview_url) : null;
+        return `<div class="asset-card">
+          ${isMe ? `<span class="asset-x" onclick="removeAsset('${a.id}')" title="Remove">✕</span>` : ''}
+          ${img ? `<div class="asset-img" style="background-image:url('${esc(img)}')"></div>` : `<div class="asset-img asset-img-blank">🎨</div>`}
+          <div class="asset-body">
+            <div class="asset-t">${esc(a.title)}</div>
+            ${a.description ? `<div class="asset-d">${esc(a.description)}</div>` : ''}
+            <div class="asset-foot">
+              ${a.price_text ? `<span class="asset-price">${esc(a.price_text)}</span>` : '<span></span>'}
+              ${store ? `<a class="asset-buy" href="${esc(store)}" target="_blank" rel="noopener">View / Buy →</a>` : ''}
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+      const addBtn = isMe ? `<button class="asset-add-btn" onclick="openAssetAdd()">+ Add an asset for sale</button>` : '';
+      return `<div class="pf-section-t">🎨 Assets for sale</div>
+        ${items ? `<div class="asset-grid">${items}</div>` : `<p class="rail-note" style="margin:0 0 10px">${isMe ? "You haven't listed anything yet." : 'Nothing listed yet.'}</p>`}
+        ${addBtn}`;
+    })(),
     wall: '<div id="pfWall">' + wallHtml(owner) + '</div>'
   };
   const order = normLayout(p.layout).filter(x => x.show).map(x => sec[x.k]).join('');
