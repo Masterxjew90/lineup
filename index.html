@@ -170,7 +170,8 @@
   /* assets for sale */
   .asset-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:11px; margin-bottom:12px}
   .asset-card{position:relative; background:var(--surface-2); border:1px solid var(--border); border-radius:13px; overflow:hidden; display:flex; flex-direction:column}
-  .asset-img{width:100%; aspect-ratio:16/10; background-size:cover; background-position:center; background-color:var(--surface-3)}
+  .asset-img{width:100%; aspect-ratio:16/10; background-size:cover; background-position:center; background-color:var(--surface-3); position:relative}
+  .asset-bundle{position:absolute; bottom:7px; right:7px; background:rgba(0,0,0,.72); color:#fff; font-size:10.5px; font-weight:700; padding:3px 8px; border-radius:6px}
   .asset-img-blank{display:flex; align-items:center; justify-content:center; font-size:26px}
   .asset-body{padding:11px 12px 12px; display:flex; flex-direction:column; gap:5px; flex:1}
   .asset-t{font-weight:700; font-size:13.5px; line-height:1.3}
@@ -186,6 +187,10 @@
   .af-lbl{display:block; font-size:12px; font-weight:700; color:var(--dim); margin:12px 0 5px}
   .af-input{width:100%; background:var(--surface-2); border:1px solid var(--border); border-radius:9px; padding:10px 12px; color:var(--text); font:inherit; font-size:14px}
   .af-hosts{font-size:11px; color:var(--faint); margin-top:6px}
+  .af-filelist{display:flex; flex-direction:column; gap:5px; margin-top:8px}
+  .af-file-row{display:flex; align-items:center; justify-content:space-between; gap:8px; background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:7px 10px; font-size:12px}
+  .af-file-name{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1}
+  .af-file-size{color:var(--faint); font-family:'JetBrains Mono',monospace; font-size:11px; white-space:nowrap}
   .af-err{color:var(--accent); font-size:12.5px; font-weight:600; min-height:16px; margin-top:10px}
   .stripe-gate{background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:14px}
   .stripe-connected{font-size:13px; font-weight:700; color:var(--good); margin-bottom:10px}
@@ -1017,8 +1022,10 @@
     <label class="af-lbl">Preview image URL (shown free to everyone)</label>
     <input id="afPreview" class="af-input" placeholder="https://i.imgur.com/…">
     <div class="af-hosts">Accepted: Imgur, Discord CDN, Giphy, Tenor, Reddit, X/Twitter, Unsplash, ibb.co, postimg.cc — must be a direct image link</div>
-    <label class="af-lbl">The file you're selling (PNG, unlocked only after payment)</label>
-    <input id="afFile" class="af-input" type="file" accept="image/png">
+    <label class="af-lbl">The files you're selling (unlocked only after payment)</label>
+    <input id="afFile" class="af-input" type="file" accept=".png,.jpg,.jpeg,.gif,.webp,.svg,.mp4,.mov,.webm,.mp3,.wav,.ogg,.ttf,.otf,.woff,.woff2,.zip,.pdf" multiple>
+    <div class="af-hosts">Images, video, audio, fonts, ZIP or PDF — up to 10 files, 100MB each. Bundle multiple files into one listing by selecting them all at once (or a single .zip).</div>
+    <div id="afFileList" class="af-filelist"></div>
     <div id="afProgress" class="af-hosts"></div>
     <div id="afErr" class="af-err"></div>
     <button class="wel-cta" id="afSubmitBtn" onclick="submitAsset()">List it</button>
@@ -2114,15 +2121,27 @@ async function removeAsset(id){
 }
 
 // ---- add-asset modal (upload + list) ----
+const ALLOWED_ASSET_EXT = ['png','jpg','jpeg','gif','webp','svg','mp4','mov','webm','mp3','wav','ogg','ttf','otf','woff','woff2','zip','pdf'];
+function fmtFileSize(n){ if(!n) return ''; if(n < 1024*1024) return Math.max(1,Math.round(n/1024)) + ' KB'; return (n/(1024*1024)).toFixed(1) + ' MB'; }
 function openAssetAdd(){
   ['afTitle','afPrice','afDesc','afPreview'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
   const f = document.getElementById('afFile'); if(f) f.value = '';
+  document.getElementById('afFileList').innerHTML = '';
   document.getElementById('afErr').textContent = '';
   document.getElementById('afProgress').textContent = '';
   document.getElementById('assetModal').style.display = 'flex';
   lockScroll(true);
 }
 function closeAssetAdd(){ document.getElementById('assetModal').style.display = 'none'; lockScroll(false); }
+document.addEventListener('change', e => {
+  if(e.target && e.target.id === 'afFile') renderAfFileList();
+});
+function renderAfFileList(){
+  const input = document.getElementById('afFile');
+  const box = document.getElementById('afFileList');
+  const files = Array.from(input.files || []);
+  box.innerHTML = files.map(f => `<div class="af-file-row"><span class="af-file-name">${esc(f.name)}</span><span class="af-file-size">${fmtFileSize(f.size)}</span></div>`).join('');
+}
 async function submitAsset(){
   const err = document.getElementById('afErr'); err.textContent = '';
   const prog = document.getElementById('afProgress'); prog.textContent = '';
@@ -2132,44 +2151,64 @@ async function submitAsset(){
   const desc = document.getElementById('afDesc').value.trim();
   const preview = document.getElementById('afPreview').value.trim();
   const fileInput = document.getElementById('afFile');
-  const file = fileInput.files && fileInput.files[0];
+  const files = Array.from(fileInput.files || []);
 
   if(!title){ err.textContent = 'Give it a title.'; return; }
   const price = Math.round(parseFloat(priceStr || '0') * 100);
   if(!price || price < 50){ err.textContent = 'Price must be at least $0.50.'; return; }
   if(price > 100000){ err.textContent = 'Price must be $1,000 or less.'; return; }
-  if(!file){ err.textContent = 'Choose the PNG file you\'re selling.'; return; }
-  if(file.type !== 'image/png'){ err.textContent = 'Only PNG files are supported right now.'; return; }
-  if(file.size > 15*1024*1024){ err.textContent = 'File is too large (15MB max).'; return; }
+  if(!files.length){ err.textContent = 'Choose at least one file to sell.'; return; }
+  if(files.length > 10){ err.textContent = 'Up to 10 files per listing.'; return; }
+  for(const f of files){
+    const ext = (f.name.split('.').pop() || '').toLowerCase();
+    if(!ALLOWED_ASSET_EXT.includes(ext)){ err.textContent = `"${f.name}" isn't a supported file type.`; return; }
+    if(f.size > 100*1024*1024){ err.textContent = `"${f.name}" is too large (100MB max).`; return; }
+  }
   if(preview && !safeBgUrl(preview)){ err.textContent = 'Preview image must be a direct https link from a supported image host.'; return; }
   if(!me || !me.username){ err.textContent = 'Sign in first.'; return; }
 
-  btn.disabled = true; btn.textContent = 'Uploading…';
+  btn.disabled = true; btn.textContent = 'Listing…';
+  const uploadedPaths = [];
   try{
     const { data: { user } } = await sb.auth.getUser();
-    const path = `${user.id}/${Date.now()}_${Math.random().toString(36).slice(2,8)}.png`;
-    prog.textContent = 'Uploading your file securely…';
-    const { error: upErr } = await sb.storage.from('asset-files').upload(path, file, { contentType: 'image/png', upsert: false });
-    if(upErr){ err.textContent = "Couldn't upload the file — try again."; btn.disabled = false; btn.textContent = 'List it'; prog.textContent=''; return; }
 
     prog.textContent = 'Creating your listing…';
-    const { data, error } = await sb.rpc('add_asset', { p_title:title, p_price_cents:price, p_desc:desc, p_preview:preview, p_file_path:path });
+    const { data, error } = await sb.rpc('add_asset', { p_title:title, p_price_cents:price, p_desc:desc, p_preview:preview });
     if(error) throw error;
     if(!data || !data.ok){
       const e2 = (data && data.error) || '';
       err.textContent = e2 === 'offensive' ? "That wording isn't allowed — try rephrasing."
         : e2 === 'limit' ? 'You can list up to 12 items — remove one to add another.'
         : e2 === 'not onboarded' ? 'Your Stripe connection needs to finish first.'
-        : "Couldn't list that — try again.";
-      // clean up the orphaned upload since the listing failed
-      try{ await sb.storage.from('asset-files').remove([path]); }catch(e3){}
+        : "Couldn't create the listing — try again.";
       btn.disabled = false; btn.textContent = 'List it'; prog.textContent = '';
       return;
+    }
+    const assetId = data.id;
+
+    for(let i=0; i<files.length; i++){
+      const f = files[i];
+      prog.textContent = `Uploading ${i+1} of ${files.length}: ${f.name}…`;
+      const ext = (f.name.split('.').pop() || '').toLowerCase();
+      const path = `${user.id}/${assetId}/${Date.now()}_${Math.random().toString(36).slice(2,8)}.${ext}`;
+      const { error: upErr } = await sb.storage.from('asset-files').upload(path, f, { upsert: false });
+      if(upErr){ err.textContent = `Couldn't upload "${f.name}" — try again.`; btn.disabled = false; btn.textContent = 'List it'; prog.textContent=''; return; }
+      uploadedPaths.push(path);
+      const { data: fdata, error: ferr } = await sb.rpc('add_asset_file', { p_asset_id:assetId, p_path:path, p_name:f.name, p_size:f.size });
+      if(ferr || !fdata || !fdata.ok){
+        err.textContent = (fdata && fdata.error) ? `"${f.name}": ${fdata.error}` : `Couldn't attach "${f.name}" — try again.`;
+        btn.disabled = false; btn.textContent = 'List it'; prog.textContent = '';
+        return;
+      }
     }
     closeAssetAdd();
     toast('Listed! 🎨', '✓');
     if(currentProfile && (currentProfile.username||'').toLowerCase() === (me.username||'').toLowerCase()) await loadProfile(me.username);
-  }catch(e){ err.textContent = "Couldn't list that — try again."; }
+  }catch(e){
+    err.textContent = "Couldn't list that — try again.";
+    // best-effort cleanup of anything already uploaded before the failure
+    if(uploadedPaths.length){ try{ await sb.storage.from('asset-files').remove(uploadedPaths); }catch(e3){} }
+  }
   btn.disabled = false; btn.textContent = 'List it'; prog.textContent = '';
 }
 
@@ -2207,14 +2246,20 @@ async function checkPurchaseReturn(){
         toast((data && data.error) || "Couldn't confirm the payment — check My purchases in a moment.", '✕');
         return;
       }
-      openDownloadModal(data.title, data.download_url);
+      openDownloadModal(data.title, data.files);
     }catch(e){ toast("Couldn't confirm the payment — check My purchases in a moment.", '✕'); }
   }
 }
-function openDownloadModal(title, url){
-  document.getElementById('dlTitle').textContent = title ? ('You bought "' + title + '" — here\'s your file:') : 'Here\'s your file:';
-  const a = document.getElementById('dlLink');
-  a.href = url || '#';
+function openDownloadModal(title, files){
+  files = files || [];
+  document.getElementById('dlTitle').textContent = title ? ('You bought "' + title + '" — ' + (files.length>1 ? files.length+' files:' : 'here\'s your file:')) : 'Here are your files:';
+  const wrap = document.getElementById('dlLink').parentElement;
+  const old = document.getElementById('dlFileList'); if(old) old.remove();
+  const box = document.createElement('div');
+  box.id = 'dlFileList';
+  box.innerHTML = files.map(f => `<a class="wel-cta" style="display:block; text-decoration:none; margin-bottom:8px" href="${esc(f.url||'#')}" target="_blank" rel="noopener">⬇ ${esc(f.name||'Download')}</a>`).join('') || '<p class="rail-note">No files found — check My purchases.</p>';
+  document.getElementById('dlLink').style.display = 'none';
+  wrap.insertBefore(box, document.getElementById('dlLink'));
   document.getElementById('downloadModal').style.display = 'flex';
   lockScroll(true);
 }
@@ -2243,8 +2288,9 @@ async function redownload(purchaseId, btnEl){
   if(btnEl){ btnEl.disabled = true; btnEl.textContent = '…'; }
   try{
     const { data, error } = await sb.functions.invoke('stripe-checkout', { body: { action:'download', purchase_id: purchaseId } });
-    if(error || !data || !data.download_url){ toast("Couldn't get the download link", '✕'); }
-    else window.open(data.download_url, '_blank', 'noopener');
+    if(error || !data || !data.files || !data.files.length){ toast("Couldn't get the download link", '✕'); }
+    else if(data.files.length === 1){ window.open(data.files[0].url, '_blank', 'noopener'); }
+    else { closePurchases(); openDownloadModal(null, data.files); }
   }catch(e){ toast("Couldn't get the download link", '✕'); }
   if(btnEl){ btnEl.disabled = false; btnEl.textContent = '⬇ Download'; }
 }
@@ -3111,7 +3157,7 @@ async function loadProfile(handle){
     try{ const { data: st } = await sb.rpc('user_stats', { p_username: currentProfile.username || handle }); profileStats = st || {}; }
     catch(e){ profileStats = {}; }
     try{
-      const { data: as } = await sb.from('profile_assets').select('id, title, price_cents, description, preview_url, file_path').eq('owner_id', currentProfile.id).order('sort_order', { ascending:true });
+      const { data: as } = await sb.from('profile_assets').select('id, title, price_cents, description, preview_url, asset_files(id)').eq('owner_id', currentProfile.id).order('sort_order', { ascending:true });
       profileAssets = as || [];
     }catch(e){ profileAssets = []; }
     await loadPosts();
@@ -3815,9 +3861,11 @@ function renderProfile(){
       const items = (profileAssets||[]).map(a => {
         const img = a.preview_url ? resolveImg(a.preview_url) : null;
         const priceStr = (typeof a.price_cents === 'number') ? '$' + (a.price_cents/100).toFixed(2) : '';
+        const fileCount = (a.asset_files || []).length;
+        const bundleTag = fileCount > 1 ? `<span class="asset-bundle">${fileCount} files</span>` : '';
         return `<div class="asset-card">
           ${isMe ? `<span class="asset-x" onclick="removeAsset('${a.id}')" title="Remove">✕</span>` : ''}
-          ${img ? `<div class="asset-img" style="background-image:url('${esc(img)}')"></div>` : `<div class="asset-img asset-img-blank">🎨</div>`}
+          ${img ? `<div class="asset-img" style="background-image:url('${esc(img)}')">${bundleTag}</div>` : `<div class="asset-img asset-img-blank">🎨${bundleTag}</div>`}
           <div class="asset-body">
             <div class="asset-t">${esc(a.title)}</div>
             ${a.description ? `<div class="asset-d">${esc(a.description)}</div>` : ''}
