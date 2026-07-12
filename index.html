@@ -198,6 +198,11 @@
   .purchase-row{display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:11px 13px; margin-bottom:8px}
   .purchase-t{font-weight:700; font-size:13.5px}
   .purchase-d{font-size:11.5px; color:var(--faint); margin-top:2px}
+  .purchase-hide{background:var(--surface-2); border:1px solid var(--border); color:var(--faint); width:34px; border-radius:9px; cursor:pointer; font-size:14px}
+  .purchase-hide:hover{color:var(--text); border-color:var(--border-2)}
+  .purchase-toggle{display:block; width:100%; background:none; border:none; color:var(--faint); font-size:12px; font-weight:600; text-decoration:underline; cursor:pointer; padding:8px 0}
+  .purchase-toggle:hover{color:var(--text)}
+  .purchase-hidden-lbl{font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--faint); margin:12px 0 6px; display:flex; justify-content:space-between; align-items:center}
   .welcome-modal{max-width:480px}
   .wel-head{text-align:center; margin-bottom:20px}
   .wel-logo{font-family:'Bricolage Grotesque',sans-serif; font-weight:800; font-size:38px; letter-spacing:-.02em}
@@ -2266,6 +2271,7 @@ function openDownloadModal(title, files){
 function closeDownloadModal(){ document.getElementById('downloadModal').style.display = 'none'; lockScroll(false); }
 
 // ---- my purchases ----
+let _myPurchases = [];
 async function openPurchases(){
   if(!me){ showBanner('info', 'Sign in to see your purchases.'); return; }
   document.getElementById('purchasesModal').style.display = 'flex';
@@ -2275,13 +2281,41 @@ async function openPurchases(){
   try{
     const { data, error } = await sb.functions.invoke('stripe-checkout', { body: { action:'my-purchases' } });
     if(error || !data){ list.innerHTML = '<p class="rail-note">Couldn\'t load your purchases — try again.</p>'; return; }
-    const items = data.purchases || [];
-    if(!items.length){ list.innerHTML = '<p class="rail-note">Nothing purchased yet.</p>'; return; }
-    list.innerHTML = items.map(p => `<div class="purchase-row">
-      <div><div class="purchase-t">${esc(p.asset_title_snapshot||'Asset')}</div><div class="purchase-d">$${(p.price_cents/100).toFixed(2)} · ${new Date(p.created_at).toLocaleDateString()}</div></div>
-      <button class="asset-buy" onclick="redownload('${p.id}', this)">⬇ Download</button>
-    </div>`).join('');
+    _myPurchases = data.purchases || [];
+    renderPurchasesList(false);
   }catch(e){ list.innerHTML = '<p class="rail-note">Couldn\'t load your purchases — try again.</p>'; }
+}
+function renderPurchasesList(showHidden){
+  const list = document.getElementById('purchasesList');
+  const visible = _myPurchases.filter(p => !p.buyer_hidden);
+  const hidden = _myPurchases.filter(p => p.buyer_hidden);
+  if(!_myPurchases.length){ list.innerHTML = '<p class="rail-note">Nothing purchased yet.</p>'; return; }
+  const row = (p, isHidden) => `<div class="purchase-row">
+      <div><div class="purchase-t">${esc(p.asset_title_snapshot||'Asset')}</div><div class="purchase-d">$${(p.price_cents/100).toFixed(2)} · ${new Date(p.created_at).toLocaleDateString()}</div></div>
+      <div style="display:flex; gap:6px">
+        <button class="asset-buy" onclick="redownload('${p.id}', this)">⬇ Download</button>
+        <button class="purchase-hide" onclick="hidePurchase('${p.id}', ${!isHidden})" title="${isHidden ? 'Unhide' : 'Hide from this list'}">${isHidden ? '↺' : '✕'}</button>
+      </div>
+    </div>`;
+  let html = visible.length ? visible.map(p => row(p, false)).join('') : '<p class="rail-note">Nothing to show — check hidden purchases below.</p>';
+  if(hidden.length){
+    if(showHidden){
+      html += `<div class="purchase-hidden-lbl">Hidden (${hidden.length}) <button class="purchase-toggle" onclick="renderPurchasesList(false)">hide</button></div>` + hidden.map(p => row(p, true)).join('');
+    } else {
+      html += `<button class="purchase-toggle" style="margin-top:8px" onclick="renderPurchasesList(true)">Show ${hidden.length} hidden purchase${hidden.length===1?'':'s'}</button>`;
+    }
+  }
+  list.innerHTML = html;
+}
+async function hidePurchase(id, hide){
+  try{
+    const { data, error } = await sb.rpc('hide_purchase', { p_id:id, p_hidden:hide });
+    if(error || !data || !data.ok){ toast("Couldn't update — try again", '✕'); return; }
+    const p = _myPurchases.find(x => x.id === id);
+    if(p) p.buyer_hidden = hide;
+    renderPurchasesList(!hide ? false : document.querySelector('.purchase-hidden-lbl') !== null);
+    toast(hide ? 'Hidden from your list' : 'Restored to your list', hide ? '✓' : '↺');
+  }catch(e){ toast("Couldn't update — try again", '✕'); }
 }
 function closePurchases(){ document.getElementById('purchasesModal').style.display = 'none'; lockScroll(false); }
 async function redownload(purchaseId, btnEl){
