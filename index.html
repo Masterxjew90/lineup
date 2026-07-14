@@ -1052,6 +1052,19 @@
   </div>
 </div>
 
+<div class="modal-bg" id="scheduleModal" onclick="if(event.target===this)closeScheduleModal()">
+  <div class="modal">
+    <div class="admin-head"><b>📅 Schedule a raid slot</b><button class="music-close" style="position:static" onclick="closeScheduleModal()" aria-label="Close">✕</button></div>
+    <p class="rail-note" style="margin:0 0 12px">Let the train know when you're going live so people can plan to raid you.</p>
+    <label class="af-lbl">When (your local time)</label>
+    <input id="schedWhen" class="af-input" type="datetime-local">
+    <label class="af-lbl">Note (optional)</label>
+    <input id="schedNote" class="af-input" maxlength="80" placeholder="e.g. Elden Ring DLC run">
+    <div id="schedErr" class="af-err"></div>
+    <button class="wel-cta" onclick="submitScheduleSlot()">Schedule it</button>
+  </div>
+</div>
+
 <div class="modal-bg" id="rateModal" onclick="if(event.target===this)closeRateModal()">
   <div class="modal" style="text-align:center">
     <div class="admin-head"><b>⭐ Rate your purchase</b><button class="music-close" style="position:static" onclick="closeRateModal()" aria-label="Close">✕</button></div>
@@ -3710,21 +3723,31 @@ let _myUid = null;
 async function ensureMyUid(){ if(!_myUid){ const { data } = await sb.auth.getUser(); _myUid = data && data.user && data.user.id; } return _myUid; }
 async function openScheduleForm(){
   await ensureMyUid();
-  const when = prompt('When are you going live? (e.g. 2026-07-16 19:00 — your local time)');
-  if(!when) return;
-  const d = new Date(when.replace(' ', 'T'));
-  if(isNaN(d.getTime())){ toast('Could not read that date/time — try again like "2026-07-16 19:00"', '✕'); return; }
-  const note = prompt('Optional note (game, occasion, etc.) — leave blank to skip') || '';
+  document.getElementById('schedWhen').value = '';
+  document.getElementById('schedNote').value = '';
+  document.getElementById('schedErr').textContent = '';
+  document.getElementById('scheduleModal').style.display = 'flex';
+  lockScroll(true);
+}
+function closeScheduleModal(){ document.getElementById('scheduleModal').style.display = 'none'; lockScroll(false); }
+async function submitScheduleSlot(){
+  const err = document.getElementById('schedErr'); err.textContent = '';
+  const whenStr = document.getElementById('schedWhen').value;
+  const note = document.getElementById('schedNote').value.trim();
+  if(!whenStr){ err.textContent = 'Pick a date and time.'; return; }
+  const d = new Date(whenStr);   // datetime-local value is parsed as local time by Date()
+  if(isNaN(d.getTime())){ err.textContent = 'Could not read that date/time.'; return; }
   try{
     const { data, error } = await sb.rpc('add_raid_slot', { p_scheduled_at: d.toISOString(), p_note: note });
     if(error || !data || !data.ok){
       const e2 = (data && data.error) || '';
-      toast(e2 === 'join the train first' ? 'Join the raid train first' : e2 === 'limit' ? 'Up to 5 upcoming slots at a time' : e2 === 'pick a future time' ? 'Pick a time in the future' : "Couldn't schedule that — try again", '✕');
+      err.textContent = e2 === 'join the train first' ? 'Join the raid train first.' : e2 === 'limit' ? 'Up to 5 upcoming slots at a time.' : e2 === 'pick a future time' ? 'Pick a time in the future.' : "Couldn't schedule that — try again.";
       return;
     }
+    closeScheduleModal();
     toast('Scheduled! 📅', '✓');
     loadAndRenderSchedule();
-  }catch(e){ toast("Couldn't schedule that — try again", '✕'); }
+  }catch(e){ err.textContent = "Couldn't schedule that — try again."; }
 }
 async function removeScheduleSlot(id){
   if(!confirm('Remove this scheduled slot?')) return;
