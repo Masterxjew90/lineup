@@ -142,6 +142,15 @@
   .train-raid-btn:hover{filter:brightness(1.08)}
   .train-confirm{width:100%; margin-top:9px; background:var(--good); color:#08130d; border:none; font-weight:700; font-size:13px; padding:9px; border-radius:9px; cursor:pointer}
   .train-confirm:hover{filter:brightness(1.06)}
+  .sched-head{font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--faint); margin:16px 0 9px; padding-top:14px; border-top:1px solid var(--border)}
+  .sched-row{display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:10px 12px; margin-bottom:7px}
+  .sched-name{font-weight:700; font-size:13.5px}
+  .sched-when{font-size:11.5px; color:var(--dim); margin-top:2px}
+  .sched-count{font-size:11px; color:var(--faint); margin-top:2px}
+  .sched-signup{background:var(--surface-3); border:1px solid var(--border-2); color:var(--text); font-weight:700; font-size:12px; padding:7px 12px; border-radius:8px; cursor:pointer; white-space:nowrap}
+  .sched-signup.on{background:var(--good); color:#08130d; border-color:transparent}
+  .sched-x{background:var(--surface-3); border:1px solid var(--border); color:var(--faint); width:30px; height:30px; border-radius:8px; cursor:pointer}
+  .sched-x:hover{color:var(--accent); border-color:var(--accent)}
   .achieve-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:10px; margin-top:4px}
   .achieve{background:var(--surface-2); border:1px solid var(--border); border-radius:13px; padding:15px 12px; text-align:center; transition:transform .12s}
   .achieve.got{border-color:var(--border-2)}
@@ -172,6 +181,11 @@
   .asset-card{position:relative; background:var(--surface-2); border:1px solid var(--border); border-radius:13px; overflow:hidden; display:flex; flex-direction:column}
   .asset-img{width:100%; aspect-ratio:16/10; background-size:cover; background-position:center; background-color:var(--surface-3); position:relative}
   .asset-bundle{position:absolute; bottom:7px; right:7px; background:rgba(0,0,0,.72); color:#fff; font-size:10.5px; font-weight:700; padding:3px 8px; border-radius:6px}
+  .asset-stats{font-size:11px; color:var(--faint); font-weight:600}
+  .rate-stars{font-size:34px; letter-spacing:6px}
+  .rate-star{color:var(--border-2); cursor:pointer; transition:color .1s}
+  .rate-star.on{color:var(--gold)}
+  .rate-star:hover{color:var(--gold)}
   .asset-img-blank{display:flex; align-items:center; justify-content:center; font-size:26px}
   .asset-body{padding:11px 12px 12px; display:flex; flex-direction:column; gap:5px; flex:1}
   .asset-t{font-weight:700; font-size:13.5px; line-height:1.3}
@@ -928,6 +942,7 @@
       <div class="panel" id="trainPanel" style="display:none">
         <h3>Raid train 🚂 <span class="refer-amt">+10 pts</span></h3>
         <div id="trainBody"></div>
+        <div id="scheduleSec"></div>
       </div>
 
       <div class="panel" id="collabPanel" style="display:none">
@@ -1034,6 +1049,17 @@
     <div id="afProgress" class="af-hosts"></div>
     <div id="afErr" class="af-err"></div>
     <button class="wel-cta" id="afSubmitBtn" onclick="submitAsset()">List it</button>
+  </div>
+</div>
+
+<div class="modal-bg" id="rateModal" onclick="if(event.target===this)closeRateModal()">
+  <div class="modal" style="text-align:center">
+    <div class="admin-head"><b>⭐ Rate your purchase</b><button class="music-close" style="position:static" onclick="closeRateModal()" aria-label="Close">✕</button></div>
+    <p class="rail-note" style="margin:0 0 12px" id="rateAssetName"></p>
+    <div class="rate-stars" id="rateStars"></div>
+    <textarea id="rateReview" class="af-input" style="min-height:60px; resize:vertical; margin-top:12px" maxlength="300" placeholder="Optional review — what did you think?"></textarea>
+    <div id="rateErr" class="af-err"></div>
+    <button class="wel-cta" onclick="submitRating()">Submit rating</button>
   </div>
 </div>
 
@@ -2294,6 +2320,7 @@ function renderPurchasesList(showHidden){
       <div><div class="purchase-t">${esc(p.asset_title_snapshot||'Asset')}</div><div class="purchase-d">$${(p.price_cents/100).toFixed(2)} · ${new Date(p.created_at).toLocaleDateString()}</div></div>
       <div style="display:flex; gap:6px">
         <button class="asset-buy" onclick="redownload('${p.id}', this)">⬇ Download</button>
+        ${p.asset_id ? `<button class="purchase-hide" onclick="openRateModal('${p.asset_id}','${esc(p.asset_title_snapshot||'this')}')" title="Rate it">⭐</button>` : ''}
         <button class="purchase-hide" onclick="hidePurchase('${p.id}', ${!isHidden})" title="${isHidden ? 'Unhide' : 'Hide from this list'}">${isHidden ? '↺' : '✕'}</button>
       </div>
     </div>`;
@@ -2327,6 +2354,39 @@ async function redownload(purchaseId, btnEl){
     else { closePurchases(); openDownloadModal(null, data.files); }
   }catch(e){ toast("Couldn't get the download link", '✕'); }
   if(btnEl){ btnEl.disabled = false; btnEl.textContent = '⬇ Download'; }
+}
+
+// ---- rate a purchased asset (buyers only, enforced server-side) ----
+let _rateAssetId = null, _rateValue = 0;
+function openRateModal(assetId, name){
+  _rateAssetId = assetId; _rateValue = 0;
+  document.getElementById('rateAssetName').textContent = 'How was "' + name + '"?';
+  document.getElementById('rateReview').value = '';
+  document.getElementById('rateErr').textContent = '';
+  renderStars();
+  document.getElementById('rateModal').style.display = 'flex';
+  lockScroll(true);
+}
+function closeRateModal(){ document.getElementById('rateModal').style.display = 'none'; lockScroll(false); }
+function renderStars(){
+  const box = document.getElementById('rateStars');
+  box.innerHTML = [1,2,3,4,5].map(n => `<span class="rate-star ${n<=_rateValue?'on':''}" onclick="setRateValue(${n})">★</span>`).join('');
+}
+function setRateValue(n){ _rateValue = n; renderStars(); }
+async function submitRating(){
+  const err = document.getElementById('rateErr'); err.textContent = '';
+  if(!_rateValue){ err.textContent = 'Pick a star rating first.'; return; }
+  const review = document.getElementById('rateReview').value.trim();
+  try{
+    const { data, error } = await sb.rpc('rate_asset', { p_asset_id:_rateAssetId, p_rating:_rateValue, p_review:review });
+    if(error || !data || !data.ok){
+      const e2 = (data && data.error) || '';
+      err.textContent = e2 === 'only buyers can rate this' ? "You can only rate things you've bought." : e2 === 'offensive' ? "That wording isn't allowed." : "Couldn't submit — try again.";
+      return;
+    }
+    closeRateModal();
+    toast('Thanks for rating! ⭐', '✓');
+  }catch(e){ err.textContent = "Couldn't submit — try again."; }
 }
 let _achCheckAt = 0;
 async function checkNewAchievements(force){
@@ -3193,6 +3253,12 @@ async function loadProfile(handle){
     try{
       const { data: as } = await sb.from('profile_assets').select('id, title, price_cents, description, preview_url, asset_files(id)').eq('owner_id', currentProfile.id).order('sort_order', { ascending:true });
       profileAssets = as || [];
+      if(profileAssets.length){
+        try{
+          const { data: stats } = await sb.rpc('asset_public_stats', { p_asset_ids: profileAssets.map(a=>a.id) });
+          profileAssets.forEach(a => { a.stats = (stats && stats[a.id]) || null; });
+        }catch(e){}
+      }
     }catch(e){ profileAssets = []; }
     await loadPosts();
   }
@@ -3567,12 +3633,13 @@ function renderTrain(){
   if(!me.in_train){
     body.innerHTML = `<p class="rail-note" style="margin:0 0 11px">Join the community raid train. When you wrap up your stream, raid the next live member and pass your viewers down the line — everyone grows together.</p>
       <button class="boost-btn" onclick="joinTrain(true)">🚂 Join the raid train</button>`;
+    document.getElementById('scheduleSec').innerHTML = '';
     return;
   }
   let html = `<div class="train-you">In the train ✓ <button class="train-leave" onclick="joinTrain(false)">Leave</button></div>`;
   if(!liveTrain.length){
     html += `<p class="rail-note">No train members are live right now. Go live and get on the lineup to ride — check back when others are streaming.</p>`;
-    body.innerHTML = html; return;
+    body.innerHTML = html; loadAndRenderSchedule(); return;
   }
   const myIdx = liveTrain.findIndex(c => (c.username||'').toLowerCase() === (me.username||'').toLowerCase());
   html += '<div class="train-list">' + liveTrain.map((c,i)=>{
@@ -3597,6 +3664,82 @@ function renderTrain(){
       </div>`;
   }
   body.innerHTML = html;
+  loadAndRenderSchedule();
+}
+
+// ---- raid scheduler (plan raids ahead instead of hoping everyone's live at once) ----
+let raidSchedule = [];
+async function loadAndRenderSchedule(){
+  await ensureMyUid();
+  try{
+    const { data, error } = await sb.rpc('get_raid_schedule');
+    raidSchedule = error ? [] : (data || []);
+  }catch(e){ raidSchedule = []; }
+  renderSchedule();
+}
+function renderSchedule(){
+  const box = document.getElementById('scheduleSec');
+  if(!box) return;
+  const fmtWhen = iso => {
+    const d = new Date(iso);
+    const now = new Date();
+    const sameDay = d.toDateString() === now.toDateString();
+    const datePart = sameDay ? 'Today' : d.toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric' });
+    const timePart = d.toLocaleTimeString(undefined, { hour:'numeric', minute:'2-digit' });
+    return datePart + ' · ' + timePart;
+  };
+  const rows = raidSchedule.map(s => {
+    const mine = s.streamer_id === (me && me.username ? _myUid : null);
+    const btn = mine
+      ? `<button class="sched-x" onclick="removeScheduleSlot('${s.id}')" title="Remove">✕</button>`
+      : `<button class="sched-signup ${s.i_signed_up?'on':''}" onclick="toggleScheduleSignup('${s.id}', ${!s.i_signed_up})">${s.i_signed_up ? '✓ In' : "I'll raid"}</button>`;
+    return `<div class="sched-row">
+      <div class="sched-main">
+        <div class="sched-name">${esc(s.display_name || s.username)}</div>
+        <div class="sched-when">${fmtWhen(s.scheduled_at)}${s.note ? ' · ' + esc(s.note) : ''}</div>
+        <div class="sched-count">${s.signup_count || 0} raider${s.signup_count===1?'':'s'} signed up</div>
+      </div>
+      ${btn}
+    </div>`;
+  }).join('');
+  box.innerHTML = `<div class="sched-head">📅 Upcoming schedule</div>
+    ${rows || '<p class="rail-note">No upcoming slots yet — be the first to schedule one.</p>'}
+    <button class="asset-add-btn" style="margin-top:9px" onclick="openScheduleForm()">+ Schedule a raid slot</button>`;
+}
+let _myUid = null;
+async function ensureMyUid(){ if(!_myUid){ const { data } = await sb.auth.getUser(); _myUid = data && data.user && data.user.id; } return _myUid; }
+async function openScheduleForm(){
+  await ensureMyUid();
+  const when = prompt('When are you going live? (e.g. 2026-07-16 19:00 — your local time)');
+  if(!when) return;
+  const d = new Date(when.replace(' ', 'T'));
+  if(isNaN(d.getTime())){ toast('Could not read that date/time — try again like "2026-07-16 19:00"', '✕'); return; }
+  const note = prompt('Optional note (game, occasion, etc.) — leave blank to skip') || '';
+  try{
+    const { data, error } = await sb.rpc('add_raid_slot', { p_scheduled_at: d.toISOString(), p_note: note });
+    if(error || !data || !data.ok){
+      const e2 = (data && data.error) || '';
+      toast(e2 === 'join the train first' ? 'Join the raid train first' : e2 === 'limit' ? 'Up to 5 upcoming slots at a time' : e2 === 'pick a future time' ? 'Pick a time in the future' : "Couldn't schedule that — try again", '✕');
+      return;
+    }
+    toast('Scheduled! 📅', '✓');
+    loadAndRenderSchedule();
+  }catch(e){ toast("Couldn't schedule that — try again", '✕'); }
+}
+async function removeScheduleSlot(id){
+  if(!confirm('Remove this scheduled slot?')) return;
+  try{ await sb.rpc('remove_raid_slot', { p_id:id }); loadAndRenderSchedule(); }catch(e){ toast("Couldn't remove — try again", '✕'); }
+}
+async function toggleScheduleSignup(id, on){
+  try{
+    const { data, error } = await sb.rpc('signup_raid_slot', { p_id:id, p_on:on });
+    if(error || !data || !data.ok){
+      const e2 = (data && data.error) || '';
+      toast(e2 === 'join the train first' ? 'Join the raid train first' : "Couldn't update — try again", '✕');
+      return;
+    }
+    loadAndRenderSchedule();
+  }catch(e){ toast("Couldn't update — try again", '✕'); }
 }
 async function joinTrain(on){
   if(!me){ return; }
@@ -3897,12 +4040,18 @@ function renderProfile(){
         const priceStr = (typeof a.price_cents === 'number') ? '$' + (a.price_cents/100).toFixed(2) : '';
         const fileCount = (a.asset_files || []).length;
         const bundleTag = fileCount > 1 ? `<span class="asset-bundle">${fileCount} files</span>` : '';
+        const st = a.stats || {};
+        const bits = [];
+        if(st.rating_count) bits.push(`⭐ ${st.avg_rating} (${st.rating_count})`);
+        if(st.sales_count) bits.push(`${st.sales_count} sold`);
+        const statLine = bits.length ? `<div class="asset-stats">${bits.join(' · ')}</div>` : '';
         return `<div class="asset-card">
           ${isMe ? `<span class="asset-x" onclick="removeAsset('${a.id}')" title="Remove">✕</span>` : ''}
           ${img ? `<div class="asset-img" style="background-image:url('${esc(img)}')">${bundleTag}</div>` : `<div class="asset-img asset-img-blank">🎨${bundleTag}</div>`}
           <div class="asset-body">
             <div class="asset-t">${esc(a.title)}</div>
             ${a.description ? `<div class="asset-d">${esc(a.description)}</div>` : ''}
+            ${statLine}
             <div class="asset-foot">
               ${priceStr ? `<span class="asset-price">${priceStr}</span>` : '<span></span>'}
               ${isMe ? '' : `<button class="asset-buy" onclick="buyAsset('${a.id}', this)">Buy →</button>`}
