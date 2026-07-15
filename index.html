@@ -2158,7 +2158,12 @@ async function checkStripeReturn(){
 async function removeAsset(id){
   if(!confirm('Remove this listing?')) return;
   try{
-    await sb.rpc('delete_asset', { p_id: id });
+    const { data, error } = await sb.rpc('delete_asset', { p_id: id });
+    if(error) throw error;
+    if(data && data.ok === false){
+      toast(data.error === 'has_sales' ? "Can't remove — this listing has sales, so buyers keep access. Contact support if you truly need it gone." : "Couldn't remove — try again", '✕');
+      return;
+    }
     toast('Removed', '✓');
     if(me) await loadProfile(me.username);
   }catch(e){ toast("Couldn't remove — try again", '✕'); }
