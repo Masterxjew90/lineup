@@ -337,6 +337,8 @@
   }
   .card:hover{transform:translateY(-3px); border-color:var(--border-2)}
   .thumb{position:relative; aspect-ratio:16/9; display:flex; align-items:flex-end; padding:10px; overflow:hidden}
+  .thumb-preview{position:absolute; inset:0; width:100%; height:100%; border:none; pointer-events:none; opacity:0; transition:opacity .25s}
+  .thumb-preview.show{opacity:1}
   .thumb-mark{
     position:absolute; top:46%; left:50%; transform:translate(-50%,-50%);
     font-family:Arial,sans-serif; font-weight:900; font-size:56px; line-height:1;
@@ -1603,6 +1605,11 @@ async function claimUsername(){
           try{ await sb.rpc('try_pay_referral'); }catch(e){}
         }
       }catch(e){}
+      // record which promotion channel brought this signup (so we can see what's actually working)
+      try{
+        const src = localStorage.getItem('lineup_src');
+        if(src){ await sb.rpc('set_signup_source', { p_src: src }); localStorage.removeItem('lineup_src'); }
+      }catch(e){}
       renderReferral();
       toast('Welcome, @' + data.username, '✓');
     } else {
@@ -2655,7 +2662,7 @@ function render(){
       ? `<button id="disc-${s.handle}" class="${dCls}" onclick="discover('${s.handle}')" ${dDis} title="${ds==='done'?'Discovery counted':'Follow while live to earn +8'}"><span class="disc-label">${dLabel}</span></button>`
       : '';
     return `<article class="card${featured ? ' is-featured' : ''}">
-      <div class="thumb" style="${thumbStyle}">
+      <div class="thumb" data-handle="${s.handle}" data-platform="${s.platform}" onmouseenter="hoverPreviewStart(this)" onmouseleave="hoverPreviewEnd(this)" style="${thumbStyle}">
         ${!s.thumb && platMark(s.platform) ? `<span class="thumb-mark"${s.platform==='kick'?' style="color:rgba(83,252,24,.20)"':''}>${platMark(s.platform)}</span>` : ''}
         <span class="live-pill"><span class="ld"></span>LIVE</span>
         <span class="viewers"><span class="vd"></span>${fmt(s.viewers)}</span>
@@ -2683,6 +2690,37 @@ function render(){
       </div>
     </article>`;
   }).join('');
+}
+
+// ---- hover-to-preview (official Twitch/Kick embed players — muted, only while actually hovering) ----
+const CAN_HOVER = window.matchMedia && matchMedia('(hover:hover) and (pointer:fine)').matches;
+let _hoverTimer = null, _hoverEl = null;
+function previewEmbedUrl(platform, handle){
+  if(platform === 'twitch') return `https://player.twitch.tv/?channel=${encodeURIComponent(handle)}&parent=${location.hostname}&muted=true&autoplay=true`;
+  if(platform === 'kick') return `https://player.kick.com/${encodeURIComponent(handle)}?muted=true&autoplay=true`;
+  return null;
+}
+function hoverPreviewStart(el){
+  if(!CAN_HOVER) return;   // skip on touch — there's no real "hover" gesture to debounce there
+  if(_hoverEl && _hoverEl !== el) hoverPreviewEnd(_hoverEl);
+  clearTimeout(_hoverTimer);
+  _hoverEl = el;
+  _hoverTimer = setTimeout(() => {
+    if(_hoverEl !== el) return;   // moved on before the delay finished
+    const url = previewEmbedUrl(el.dataset.platform, el.dataset.handle);
+    if(!url) return;
+    const f = document.createElement('iframe');
+    f.className = 'thumb-preview';
+    f.src = url;
+    f.allow = 'autoplay';
+    el.appendChild(f);
+    requestAnimationFrame(() => f.classList.add('show'));
+  }, 500);   // brief delay so casually passing the mouse over a card doesn't spin up a live video
+}
+function hoverPreviewEnd(el){
+  if(_hoverEl === el){ clearTimeout(_hoverTimer); _hoverEl = null; }
+  const f = el.querySelector('.thumb-preview');
+  if(f) f.remove();   // removing the iframe (not just hiding it) actually stops the video/audio
 }
 
 // ---- interactions ----
@@ -4306,6 +4344,15 @@ try{
   const initRef = new URLSearchParams(location.search).get('ref');
   if(initRef && /^[a-z0-9_]{3,25}$/i.test(initRef) && !localStorage.getItem('lineup_ref')){
     localStorage.setItem('lineup_ref', initRef.toLowerCase());
+  }
+}catch(e){}
+
+// source capture: /?src=discord (etc) — remember which promotion channel brought this visitor,
+// so we can tell what's actually working once they sign up. First source wins per device.
+try{
+  const initSrc = new URLSearchParams(location.search).get('src');
+  if(initSrc && /^[a-z0-9_-]{1,30}$/i.test(initSrc) && !localStorage.getItem('lineup_src')){
+    localStorage.setItem('lineup_src', initSrc.toLowerCase());
   }
 }catch(e){}
 
