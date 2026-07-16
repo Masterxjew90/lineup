@@ -2662,7 +2662,7 @@ function render(){
       ? `<button id="disc-${s.handle}" class="${dCls}" onclick="discover('${s.handle}')" ${dDis} title="${ds==='done'?'Discovery counted':'Follow while live to earn +8'}"><span class="disc-label">${dLabel}</span></button>`
       : '';
     return `<article class="card${featured ? ' is-featured' : ''}">
-      <div class="thumb" data-handle="${s.handle}" data-platform="${s.platform}" onmouseenter="hoverPreviewStart(this)" onmouseleave="hoverPreviewEnd(this)" style="${thumbStyle}">
+      <div class="thumb" data-handle="${s.handle}" data-platform="${s.platform}" onmouseenter="hoverPreviewStart(this)" onmouseleave="hoverPreviewEnd(this)" onclick="window.open('${s.url}','_blank','noopener')" style="${thumbStyle}; cursor:pointer">
         ${!s.thumb && platMark(s.platform) ? `<span class="thumb-mark"${s.platform==='kick'?' style="color:rgba(83,252,24,.20)"':''}>${platMark(s.platform)}</span>` : ''}
         <span class="live-pill"><span class="ld"></span>LIVE</span>
         <span class="viewers"><span class="vd"></span>${fmt(s.viewers)}</span>
