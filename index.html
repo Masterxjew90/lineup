@@ -337,8 +337,9 @@
   }
   .card:hover{transform:translateY(-3px); border-color:var(--border-2)}
   .thumb{position:relative; aspect-ratio:16/9; display:flex; align-items:flex-end; padding:10px; overflow:hidden}
-  .thumb-preview{position:absolute; inset:0; width:100%; height:100%; border:none; pointer-events:none; opacity:0; transition:opacity .25s}
+  .thumb-preview{position:absolute; inset:0; width:100%; height:100%; border:none; pointer-events:none; opacity:0; transition:opacity .25s; z-index:1}
   .thumb-preview.show{opacity:1}
+  .thumb-click{position:absolute; inset:0; z-index:2; cursor:pointer}
   .thumb-mark{
     position:absolute; top:46%; left:50%; transform:translate(-50%,-50%);
     font-family:Arial,sans-serif; font-weight:900; font-size:56px; line-height:1;
@@ -2662,7 +2663,8 @@ function render(){
       ? `<button id="disc-${s.handle}" class="${dCls}" onclick="discover('${s.handle}')" ${dDis} title="${ds==='done'?'Discovery counted':'Follow while live to earn +8'}"><span class="disc-label">${dLabel}</span></button>`
       : '';
     return `<article class="card${featured ? ' is-featured' : ''}">
-      <div class="thumb" data-handle="${s.handle}" data-platform="${s.platform}" onmouseenter="hoverPreviewStart(this)" onmouseleave="hoverPreviewEnd(this)" onclick="window.open('${s.url}','_blank','noopener')" style="${thumbStyle}; cursor:pointer">
+      <div class="thumb" data-handle="${s.handle}" data-platform="${s.platform}" onmouseenter="hoverPreviewStart(this)" onmouseleave="hoverPreviewEnd(this)" style="${thumbStyle}">
+        <span class="thumb-click" onclick="window.open('${s.url}','_blank','noopener')" title="Open ${display}'s channel"></span>
         ${!s.thumb && platMark(s.platform) ? `<span class="thumb-mark"${s.platform==='kick'?' style="color:rgba(83,252,24,.20)"':''}>${platMark(s.platform)}</span>` : ''}
         <span class="live-pill"><span class="ld"></span>LIVE</span>
         <span class="viewers"><span class="vd"></span>${fmt(s.viewers)}</span>
