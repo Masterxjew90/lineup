@@ -353,6 +353,19 @@
   .skel-line.w60{width:60%} .skel-line.w40{width:40%} .skel-line.w80{width:80%}
   .skel-thumb, .skel-line{background:linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%); background-size:200% 100%; animation:skel-shimmer 1.4s ease-in-out infinite}
   @keyframes skel-shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+  /* level-up celebration */
+  .lvlup-fx{position:fixed; inset:0; z-index:400; pointer-events:none; display:flex; align-items:center; justify-content:center; overflow:hidden}
+  .lvlup-card{display:flex; flex-direction:column; align-items:center; gap:6px; padding:22px 40px; border-radius:20px; background:rgba(15,16,20,.88); backdrop-filter:blur(6px); border:1px solid rgba(255,255,255,.12); opacity:0; transform:scale(.6); animation:lvlup-pop .6s cubic-bezier(.2,1.6,.4,1) forwards, lvlup-out .5s ease .3s forwards; animation-delay:0s, 2.1s}
+  @keyframes lvlup-pop{0%{opacity:0; transform:scale(.5)}60%{opacity:1; transform:scale(1.08)}100%{opacity:1; transform:scale(1)}}
+  @keyframes lvlup-out{to{opacity:0; transform:scale(.92)}}
+  .lvlup-eyebrow{font-size:12px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; color:var(--gold)}
+  .lvlup-num{font-family:'Bricolage Grotesque',sans-serif; font-weight:800; font-size:56px; line-height:1; color:#fff; text-shadow:0 0 30px currentColor}
+  .lvlup-sub{font-size:13px; color:var(--dim)}
+  .confetti-piece{position:absolute; top:-20px; border-radius:2px; animation:confetti-fall linear forwards}
+  @keyframes confetti-fall{
+    0%{transform:translateY(0) rotate(0deg); opacity:1}
+    100%{transform:translateY(105vh) rotate(600deg); opacity:.9}
+  }
   .thumb{position:relative; aspect-ratio:16/9; display:flex; align-items:flex-end; padding:10px; overflow:hidden}
   .thumb-mark{
     position:absolute; top:46%; left:50%; transform:translate(-50%,-50%);
@@ -1058,6 +1071,8 @@
   </div>
 </div>
 </div>
+
+<div id="levelUpFx" class="lvlup-fx" aria-hidden="true"></div>
 
 <div class="modal-bg" id="assetModal" onclick="if(event.target===this)closeAssetAdd()">
   <div class="modal">
@@ -3872,6 +3887,29 @@ async function confirmRaid(){
     toast('Raid logged — nice! +10 points', '🚂'); checkNewAchievements(true);
   }catch(e){ toast("Couldn't log that — try again", '✕'); }
 }
+const CONFETTI_COLORS = ['#FF5C39','#FFB23D','#3DDC97','#A56BFF','#36B6FF','#FF3B7C'];
+function celebrateLevelUp(level){
+  const fx = document.getElementById('levelUpFx');
+  if(!fx) return;
+  const c = levelColor(level);
+  let html = `<div class="lvlup-card" style="color:${c}">
+      <div class="lvlup-eyebrow">Level up!</div>
+      <div class="lvlup-num">LVL ${level}</div>
+      <div class="lvlup-sub">Keep showing up — the whole lineup grows with you.</div>
+    </div>`;
+  for(let i=0; i<46; i++){
+    const left = Math.random()*100;
+    const size = 6 + Math.random()*7;
+    const dur = 2.2 + Math.random()*1.4;
+    const delay = Math.random()*0.5;
+    const color = CONFETTI_COLORS[Math.floor(Math.random()*CONFETTI_COLORS.length)];
+    const w = Math.random() < 0.5 ? size : size*0.4;
+    html += `<span class="confetti-piece" style="left:${left}%; width:${w}px; height:${size}px; background:${color}; animation-duration:${dur}s; animation-delay:${delay}s"></span>`;
+  }
+  fx.innerHTML = html;
+  setTimeout(() => { fx.innerHTML = ''; }, 3000);
+}
+let _lastKnownLevel = null;
 function renderYouLevel(){
   const el = document.getElementById('youLevel'); if(!el) return;
   if(!me || me.total_earned == null){ el.style.display = 'none'; return; }
@@ -3880,6 +3918,8 @@ function renderYouLevel(){
   el.style.display = 'block';
   el.innerHTML = `<div class="yl-top">${levelBadge(me.total_earned)}<span class="yl-next">${li.toNext > 0 ? li.toNext + ' pts to LVL ' + (li.level + 1) : 'Top tier'}</span></div>
     <div class="yl-bar"><div class="yl-fill" style="width:${li.pct}%; background:${c}"></div></div>`;
+  if(_lastKnownLevel !== null && li.level > _lastKnownLevel) celebrateLevelUp(li.level);
+  _lastKnownLevel = li.level;
 }
 function overlayLinkFor(username, page){
   const base = location.href.split('?')[0].split('#')[0].replace(/[^/]*$/, '');
