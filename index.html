@@ -2363,7 +2363,7 @@ function renderPurchasesList(showHidden){
   const hidden = _myPurchases.filter(p => p.buyer_hidden);
   if(!_myPurchases.length){ list.innerHTML = '<p class="rail-note">Nothing purchased yet.</p>'; return; }
   const row = (p, isHidden) => `<div class="purchase-row">
-      <div><div class="purchase-t">${esc(p.asset_title_snapshot||'Asset')}</div><div class="purchase-d">$${(p.price_cents/100).toFixed(2)} · ${new Date(p.created_at).toLocaleDateString()}</div></div>
+      <div><div class="purchase-t">${esc(p.asset_title_snapshot||'Asset')}</div><div class="purchase-d">$${(p.price_cents/100).toFixed(2)} · ${timeAgo(new Date(p.created_at).getTime())}</div></div>
       <div style="display:flex; gap:6px">
         <button class="asset-buy" onclick="redownload('${p.id}', this)">⬇ Download</button>
         ${p.asset_id ? `<button class="purchase-hide" onclick="openRateModal('${p.asset_id}','${esc(p.asset_title_snapshot||'this')}')" title="Rate it">⭐</button>` : ''}
