@@ -346,6 +346,13 @@
     overflow:hidden; transition:transform .14s, border-color .14s; display:flex; flex-direction:column;
   }
   .card:hover{transform:translateY(-3px); border-color:var(--border-2)}
+  .skel-card{background:var(--surface); border:1px solid var(--border); border-radius:var(--r); overflow:hidden}
+  .skel-thumb{aspect-ratio:16/9}
+  .skel-body{padding:12px 14px; display:flex; flex-direction:column; gap:8px}
+  .skel-line{height:11px; border-radius:6px}
+  .skel-line.w60{width:60%} .skel-line.w40{width:40%} .skel-line.w80{width:80%}
+  .skel-thumb, .skel-line{background:linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%); background-size:200% 100%; animation:skel-shimmer 1.4s ease-in-out infinite}
+  @keyframes skel-shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
   .thumb{position:relative; aspect-ratio:16/9; display:flex; align-items:flex-end; padding:10px; overflow:hidden}
   .thumb-mark{
     position:absolute; top:46%; left:50%; transform:translate(-50%,-50%);
@@ -1461,6 +1468,7 @@ async function afterConnectLite(user, twitchLinked){
       profile_image_url: md.avatar_url || md.picture || ''
     };
     hideLanding();
+    renderGridSkeleton();
     document.body.classList.add('lite-mode');
     await syncProfileLite();
     try{ await sb.rpc('sync_verifications'); }catch(e){}
@@ -1521,6 +1529,7 @@ async function afterConnectTwitch(){
     me = u.data && u.data[0];
     if(!me) throw new Error('no user returned');
     hideLanding();
+    renderGridSkeleton();
 
     // sync profile + pull points and cooldowns from the shared database
     await syncProfile();
@@ -1987,6 +1996,7 @@ async function browseCategory(){
   const btn = document.getElementById('browseBtn');
   btn.disabled = true; btn.textContent = 'Searching…';
   showBanner('info', 'Finding the smallest streamers in “' + q + '”…');
+  renderGridSkeleton();
   try{
     const cat = await tw('/search/categories?query=' + encodeURIComponent(q) + '&first=1');
     const game = cat.data && cat.data[0];
@@ -2080,6 +2090,7 @@ function setMode(m){
     showBanner('info', 'Pick a category below to discover the smallest streamers live in it right now.');
   } else if(m==='lineup'){
     showBanner('info', 'Loading members on the lineup…');
+    renderGridSkeleton();
     loadLineup().then(()=>{ buildChips(); render(); renderOffline();
       showBanner('ok', lineupLive.length
         ? 'Lineup members who are live right now — featured below.'
@@ -2608,6 +2619,20 @@ function setPlatform(v){state.platform=v; buildChips(); render();}
 function setCat(v){state.cat=v; buildChips(); render();}
 
 // ---- render grid ----
+// loading placeholder — shown in the grid while a fetch is in flight, so the main content
+// area visibly communicates "working on it" instead of sitting blank or stale for a few seconds
+function renderGridSkeleton(count){
+  const grid = document.getElementById('grid');
+  if(!grid) return;
+  grid.innerHTML = Array.from({length: count || 8}).map(() => `<div class="skel-card">
+    <div class="skel-thumb"></div>
+    <div class="skel-body">
+      <div class="skel-line w80"></div>
+      <div class="skel-line w40"></div>
+      <div class="skel-line w60"></div>
+    </div>
+  </div>`).join('');
+}
 function render(){
   state.sort = document.getElementById('sort').value;
   let list = getActiveList().filter(s=>{
