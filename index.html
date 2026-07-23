@@ -85,6 +85,7 @@
   .brand-name{font-family:'Bricolage Grotesque',sans-serif; font-weight:800; font-size:21px; letter-spacing:-.02em}
   .brand-name span{color:var(--accent)}
   .search{
+    position:relative;
     flex:1; max-width:440px; display:flex; align-items:center; gap:9px;
     background:var(--surface); border:1px solid var(--border); border-radius:11px;
     padding:9px 14px; color:var(--dim);
@@ -92,6 +93,14 @@
   .search:focus-within{border-color:var(--border-2)}
   .search input{background:none; border:none; outline:none; color:var(--text); width:100%; font-size:14px}
   .search input::placeholder{color:var(--faint)}
+  .search-members{position:absolute; top:calc(100% + 6px); left:0; right:0; background:var(--surface); border:1px solid var(--border-2); border-radius:12px; overflow:hidden; z-index:60; display:none; box-shadow:0 14px 40px rgba(0,0,0,.5)}
+  .search-members.show{display:block}
+  .sm-row{display:flex; align-items:center; gap:10px; padding:9px 13px; cursor:pointer; border-bottom:1px solid var(--border)}
+  .sm-row:last-child{border-bottom:none}
+  .sm-row:hover{background:var(--surface-2)}
+  .sm-ava{width:26px; height:26px; border-radius:50%; background-size:cover; background-position:center; background-color:var(--surface-3); flex-shrink:0}
+  .sm-name{font-size:13px; font-weight:700; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .sm-live{width:6px; height:6px; border-radius:50%; background:var(--good); flex-shrink:0}
   .topbar-right{display:flex; align-items:center; gap:12px; margin-left:auto; flex-shrink:0}
   .points-pill{
     display:flex; align-items:center; gap:7px; background:var(--surface-2);
@@ -839,6 +848,7 @@
   <div class="search">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
     <input id="search" type="text" placeholder="Search a streamer, game, or vibe…" aria-label="Search streams">
+    <div class="search-members" id="searchMembers"></div>
   </div>
   <div class="topbar-right">
     <div class="points-pill" title="Points you've earned by showing up">
@@ -4307,7 +4317,42 @@ async function renderMembers(){
 }
 
 // ---- search ----
-document.getElementById('search').addEventListener('input', e=>{state.q=e.target.value; render();});
+document.getElementById('search').addEventListener('input', e=>{state.q=e.target.value; render(); memberSearchInput(e.target.value);});
+document.addEventListener('click', e => { if(!e.target.closest('.search')) hideMemberSearch(); });
+
+let _smTimer = null;
+function memberSearchInput(q){
+  clearTimeout(_smTimer);
+  q = (q||'').trim();
+  if(q.length < 2){ hideMemberSearch(); return; }
+  _smTimer = setTimeout(() => runMemberSearch(q), 300);
+}
+async function runMemberSearch(q){
+  try{
+    const { data, error } = await sb.rpc('search_members', { p_query: q });
+    if(error || !data || !data.length){ hideMemberSearch(); return; }
+    renderMemberSearch(data);
+  }catch(e){ hideMemberSearch(); }
+}
+function renderMemberSearch(members){
+  const box = document.getElementById('searchMembers');
+  box.innerHTML = members.map(m => {
+    const ava = m.avatar ? `background-image:url('${esc(m.avatar)}')` : '';
+    return `<div class="sm-row" onclick="pickMemberSearch('${esc(m.username)}')">
+      <span class="sm-ava" style="${ava}"></span>
+      <span class="sm-name">${esc(m.display_name || m.username)}</span>
+      ${m.is_listed ? '<span class="sm-live" title="On the lineup"></span>' : ''}
+    </div>`;
+  }).join('');
+  box.classList.add('show');
+}
+function hideMemberSearch(){ const box = document.getElementById('searchMembers'); if(box){ box.classList.remove('show'); box.innerHTML=''; } }
+function pickMemberSearch(username){
+  hideMemberSearch();
+  document.getElementById('search').value = '';
+  state.q = ''; render();
+  openProfile(username);
+}
 document.getElementById('browseInput').addEventListener('keydown', e=>{ if(e.key==='Enter') browseCategory(); });
 
 // init
