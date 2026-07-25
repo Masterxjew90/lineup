@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://masterxjew90.github.io/lineup/sitemap.xml
+Sitemap: https://xmxj90x.github.io/lineup/sitemap.xml
